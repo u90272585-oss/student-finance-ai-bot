@@ -20,7 +20,8 @@ A Telegram bot designed to help students manage their finances in a simple and i
 - 🤖 AI-based financial tips and mini-learning  
 - 👥 Shared financial goals with friends  
 - 💎 Premium features (unlimited categories)  
-- 📤 Export data to Excel  
+- 📤 Export data to Excel
+- Goals
 
 ---
 
@@ -51,8 +52,9 @@ This project aims to solve the problem of poor financial management among studen
 
 ## 👥 Team
 
-- Backend Developer / Scrum Master — You  
-- Developers — Your teammates  
+Scrum Master — Uldana
+- Backend Developer's - Uldana, Malika
+- Developers — Uldana, Malika, Darina, Engineer, AvdoulR. 
 
 ---
 
