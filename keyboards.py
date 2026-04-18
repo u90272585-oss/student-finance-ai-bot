@@ -50,7 +50,8 @@ def get_main_keyboard(lang):
         [KeyboardButton(text=get_text(lang, 'income')), KeyboardButton(text=get_text(lang, 'expense'))],
         [KeyboardButton(text=get_text(lang, 'goals')), KeyboardButton(text=get_text(lang, 'statistics'))],
         [KeyboardButton(text="👥 Shared Goals"), KeyboardButton(text=get_text(lang, 'videos'))],
-        [KeyboardButton(text=get_text(lang, 'settings')), KeyboardButton(text=get_text(lang, 'help'))]
+        [KeyboardButton(text="💎 Премиум"), KeyboardButton(text=get_text(lang, 'settings'))],  # 👈 НОВАЯ КНОПКА
+        [KeyboardButton(text=get_text(lang, 'help'))]
     ]
     return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
 
@@ -83,7 +84,6 @@ def get_delete_confirmation_keyboard(lang):
     return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
 
 def get_goal_actions_keyboard(lang):
-    # Текст кнопки на разных языках
     add_money_texts = {
         'ru': '💰 Добавить деньги в цель',
         'en': '💰 Add money to goal',
@@ -94,7 +94,8 @@ def get_goal_actions_keyboard(lang):
     add_money_text = add_money_texts.get(lang, '💰 Add money to goal')
     
     buttons = [
-        [KeyboardButton(text=add_money_text)],
+        [KeyboardButton(text=add_money_text)],  # Добавить деньги
+        [KeyboardButton(text="➕ Создать новую цель")],  # НОВАЯ КНОПКА
         [KeyboardButton(text=get_text(lang, 'delete_goal'))],
         [KeyboardButton(text=get_text(lang, 'main_menu'))]
     ]

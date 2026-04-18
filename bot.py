@@ -6,12 +6,14 @@ import random
 import string
 from datetime import datetime
 from aiogram import Bot, Dispatcher, types
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 from aiogram.filters import Command
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.context import FSMContext
 import os
 from dotenv import load_dotenv
+from ai_assistant import get_ai_response
 
 from database import Database
 from translations import get_text, COUNTRIES, LANGUAGES, CURRENCIES, VIDEO_CATEGORIES
@@ -616,20 +618,42 @@ async def new_goal_amount(message: types.Message, state: FSMContext):
     try:
         amount = float(message.text.replace(',', '.'))
         data = await state.get_data()
-        goal_id = db.add_goal(message.from_user.id, data['name'], amount)
         
+        # Проверка лимита целей для бесплатных
+        goals = db.get_goals(message.from_user.id)
+        is_premium = db.is_premium(message.from_user.id)
+        
+        if not is_premium and len(goals) >= 3:
+            await message.answer(
+                "⚠️ У бесплатного аккаунта максимум 3 цели.\n\n"
+                "💎 Оформите премиум для неограниченного количества целей!\n"
+                "Команда: /premium",
+                reply_markup=get_main_keyboard(lang)
+            )
+            await state.clear()
+            return
+        
+        goal_id = db.add_goal(message.from_user.id, data['name'], amount)
         await state.update_data(goal_id=goal_id, goal_amount=amount, goal_name=data['name'])
         
-        await message.answer(
-            "🌸 Choose a flower for your goal!\n\n"
-            "🌱 Each time you add money, your flower will grow!\n\n"
-            "Select one:",
-            reply_markup=get_plant_choice_keyboard(lang)
-        )
+        if is_premium:
+            await message.answer(
+                "🌸 Выберите цветок для цели! (Премиум: все цветы доступны)\n\n"
+                "🌱 Каждый раз когда добавляешь деньги, цветок растёт!\n\nВыбери:",
+                reply_markup=get_plant_choice_keyboard(lang, premium=True)
+            )
+        else:
+            await message.answer(
+                "🌸 Выберите цветок для цели! (Бесплатно: только Лотос)\n\n"
+                "💎 Оформите Премиум чтобы открыть: Розу, Подсолнух, Бамбук, Гибискус\n\n"
+                "Выберите Лотос или напишите /premium для подробностей:",
+                reply_markup=get_plant_choice_keyboard(lang, premium=False)
+            )
         await state.set_state(GoalState.plant_choice)
         
     except:
         await message.answer(get_text(lang, 'invalid_number'))
+
 
 @dp.message(GoalState.plant_choice)
 async def goal_plant_choice(message: types.Message, state: FSMContext):
@@ -637,19 +661,44 @@ async def goal_plant_choice(message: types.Message, state: FSMContext):
     lang = user[3]
     currency = user[4]
     
-    if message.text == get_text(lang, 'cancel'):
+    if message.text == get_text(lang, 'cancel') or message.text == "❌ Cancel":
         await state.clear()
         await message.answer(get_text(lang, 'cancelled'), reply_markup=get_main_keyboard(lang))
         return
     
+    # Если написал /premium — показываем инфо не выходя из состояния
+    if message.text == "/premium":
+        await message.answer(
+            "💎 <b>Premium доступ</b>\n\n"
+            "Что вы получаете:\n"
+            "• 🌸 Все 5 цветов для целей\n"
+            "• 📚 Все 30+ видео\n"
+            "• 🚀 Безлимит целей\n\n"
+            "💰 Цена: 400 ₸ / месяц\n\n"
+            "📞 Для оформления: @ваш_логин\n\n"
+            "После оформления нажмите на цветок ниже 👇",
+            parse_mode="HTML"
+        )
+        return  # остаёмся в состоянии plant_choice
+    
+    is_premium = db.is_premium(message.from_user.id)
+    premium_plants = ['rose', 'sunflower', 'bamboo', 'hibiscus']
+    
     selected_plant = None
     for plant_key, plant_data in PLANT_TYPES.items():
-        if message.text == plant_data[f'name_{lang}']:
+        if message.text == plant_data.get(f'name_{lang}', plant_data['name_en']):
             selected_plant = plant_key
             break
     
     if not selected_plant:
-        await message.answer("❌ Please select a flower from the list!")
+        await message.answer("❌ Пожалуйста, выберите цветок из списка!")
+        return
+    
+    if selected_plant in premium_plants and not is_premium:
+        await message.answer(
+            "💎 Этот цветок доступен только для Премиум!\n\n"
+            "Напишите /premium для подробностей."
+        )
         return
     
     data = await state.get_data()
@@ -658,7 +707,6 @@ async def goal_plant_choice(message: types.Message, state: FSMContext):
     amount = data['goal_amount']
     
     db.set_goal_plant(goal_id, selected_plant)
-    
     plant_text = get_plant_text(selected_plant, 0, 0, amount, CURRENCIES[currency]['symbol'], lang)
     
     await message.answer(
@@ -917,6 +965,7 @@ async def join_shared_goal_execute(message: types.Message, state: FSMContext):
     elif result == 'already_member':
         await message.answer("⚠️ You are already a member of this goal!", reply_markup=get_shared_goals_keyboard())
     else:
+        # Уведомляем пользователя
         await message.answer(
             f"✅ You joined shared goal \"{result['name']}\"!\n\n"
             f"Target: {result['target']} {CURRENCIES[currency]['symbol']}\n"
@@ -924,8 +973,30 @@ async def join_shared_goal_execute(message: types.Message, state: FSMContext):
             f"Start contributing to achieve it together!",
             reply_markup=get_shared_goals_keyboard()
         )
+        
+        # Уведомляем создателя цели
+        try:
+            creator_id = result['creator_id']
+            joiner_name = message.from_user.first_name or "Кто-то"
+            joiner_username = f"@{message.from_user.username}" if message.from_user.username else ""
+            
+            creator = db.get_user(creator_id)
+            creator_currency = CURRENCIES[creator[4]]['symbol'] if creator else CURRENCIES[currency]['symbol']
+            
+            await bot.send_message(
+                creator_id,
+                f"🎉 <b>Новый участник в вашей цели!</b>\n\n"
+                f"👤 {joiner_name} {joiner_username} присоединился к цели\n"
+                f"🎯 <b>\"{result['name']}\"</b>\n\n"
+                f"💰 Прогресс: {result['current']:.0f} / {result['target']:.0f} {creator_currency}\n\n"
+                f"Копите вместе! 💪\n\n"
+                f"👉 Чтобы добавить деньги:\n"
+                f"👥 Shared Goals → 📋 My Shared Goals → 💰 Add Money",
+                parse_mode="HTML"
+            )
+        except Exception as e:
+            logger.warning(f"Не удалось уведомить создателя: {e}")
     await state.clear()
-
 @dp.message(lambda m: m.text in ["📋 My Shared Goals", "📋 Мои общие цели"])
 async def list_shared_goals(message: types.Message, state: FSMContext):
     user = db.get_user(message.from_user.id)
@@ -939,7 +1010,7 @@ async def list_shared_goals(message: types.Message, state: FSMContext):
         return
     
     text = "👥 <b>Your Shared Goals</b>\n\n"
-    goals_list = []
+    keyboard_buttons = []
     
     for goal in goals:
         goal_id, name, target, current, invite_code, creator_id, total_contributed = goal
@@ -953,28 +1024,49 @@ async def list_shared_goals(message: types.Message, state: FSMContext):
         text += f"📊 Progress: {percent:.1f}%\n"
         text += f"🔑 Code: <code>{invite_code}</code>\n"
         text += f"👥 Members: {members_count}\n\n"
-        goals_list.append(goal_id)
+        
+        # Кнопка для каждой цели
+        keyboard_buttons.append([KeyboardButton(text=f"💰 {name}")])
     
-    await state.update_data(shared_goals_list=goals_list)
-    await message.answer(text, parse_mode="HTML")
-    await message.answer("Select a goal:", reply_markup=get_shared_goal_actions_keyboard())
+    keyboard_buttons.append([KeyboardButton(text="◀️ Back")])
+    
+    await state.update_data(shared_goals=goals)
+    await message.answer(text, parse_mode="HTML",
+        reply_markup=ReplyKeyboardMarkup(keyboard=keyboard_buttons, resize_keyboard=True))
     await state.set_state(SharedGoalState.select_for_add)
 
 @dp.message(SharedGoalState.select_for_add)
 async def select_shared_goal_action(message: types.Message, state: FSMContext):
     user = db.get_user(message.from_user.id)
     lang = user[3]
+    currency = user[4]
     
-    if message.text in ["💰 Add Money", "💰 Добавить деньги"]:
-        await message.answer("Enter the goal name or invite code to add money:")
-        await state.set_state(SharedGoalState.add_money)
-    elif message.text in ["📊 View Progress", "📊 Прогресс"]:
-        await message.answer("Enter the goal name or invite code to view progress:")
-        await state.set_state(SharedGoalState.enter_amount)
-    elif message.text in ["◀️ Back", "◀️ Назад"]:
+    if message.text in ["◀️ Back", "◀️ Назад"]:
+        await state.clear()
         await shared_goals_menu(message, state)
-    else:
-        await message.answer("Please choose an option from the menu!")
+        return
+    
+    # Ищем цель по нажатой кнопке
+    data = await state.get_data()
+    goals = data.get('shared_goals', [])
+    
+    selected_goal = None
+    for goal in goals:
+        if message.text == f"💰 {goal[1]}":
+            selected_goal = goal
+            break
+    
+    if not selected_goal:
+        await message.answer("❌ Выбери цель из списка!")
+        return
+    
+    await state.update_data(selected_goal=selected_goal)
+    await message.answer(
+        f"💰 Сколько добавить в цель \"{selected_goal[1]}\"?\n\n"
+        f"Сейчас: {selected_goal[3]:.0f} / {selected_goal[2]:.0f} {CURRENCIES[currency]['symbol']}",
+        reply_markup=get_cancel_keyboard(lang)
+    )
+    await state.set_state(SharedGoalState.enter_amount)
 
 @dp.message(SharedGoalState.add_money)
 async def add_money_to_shared_goal(message: types.Message, state: FSMContext):
@@ -1091,20 +1183,181 @@ async def back_to_main(message: types.Message):
             reply_markup=get_main_keyboard(lang),
             parse_mode="HTML"
         )
-
-@dp.message()
-async def handle_unknown(message: types.Message):
+# ========== ИИ-АССИСТЕНТ ==========
+@dp.message(Command("ask"))
+async def ask_ai(message: types.Message):
     user = db.get_user(message.from_user.id)
-    if user:
-        lang = user[3]
+    if not user:
+        await cmd_start(message, None)
+        return
+
+    user_query = message.text.replace("/ask", "").strip()
+
+    if not user_query:
         await message.answer(
-            get_text(lang, 'error'),
+            "🤖 Напиши вопрос после команды /ask\nПример: /ask Как начать копить деньги?"
+        )
+        return
+
+    await message.answer("🤔 Думаю...")
+    
+    try:
+        answer = await get_ai_response(user_query)
+        await message.answer(answer)
+    except Exception as e:
+        await message.answer(f"❌ Ошибка: {type(e).__name__}: {e}")
+
+# ========== АДМИН КОМАНДЫ ==========
+ADMIN_ID = 1362117255  # <- замени на свой Telegram ID
+
+@dp.message(Command("give_premium"))
+async def give_premium(message: types.Message):
+    if message.from_user.id != ADMIN_ID:
+        await message.answer("❌ У вас нет доступа к этой команде.")
+        return
+    
+    parts = message.text.split()
+    if len(parts) != 3:
+        await message.answer(
+            "❌ Неверный формат.\n\n"
+            "Использование: /give_premium [user_id] [дни]\n"
+            "Пример: /give_premium 123456789 30"
+        )
+        return
+    
+    try:
+        target_id = int(parts[1])
+        days = int(parts[2])
+    except:
+        await message.answer("❌ user_id и дни должны быть числами.")
+        return
+    
+    user = db.get_user(target_id)
+    if not user:
+        await message.answer(f"❌ Пользователь {target_id} не найден в базе.")
+        return
+    
+    db.add_premium(target_id, days)
+    await message.answer(
+        f"✅ Премиум выдан!\n\n"
+        f"👤 Пользователь: {target_id}\n"
+        f"📅 Дней: {days}"
+    )
+
+@dp.message(Command("remove_premium"))
+async def remove_premium_cmd(message: types.Message):
+    if message.from_user.id != ADMIN_ID:
+        await message.answer("❌ У вас нет доступа к этой команде.")
+        return
+    
+    parts = message.text.split()
+    if len(parts) != 2:
+        await message.answer(
+            "❌ Неверный формат.\n\n"
+            "Использование: /remove_premium [user_id]\n"
+            "Пример: /remove_premium 123456789"
+        )
+        return
+    
+    try:
+        target_id = int(parts[1])
+    except:
+        await message.answer("❌ user_id должен быть числом.")
+        return
+    
+    db.remove_premium(target_id)
+    await message.answer(f"✅ Премиум удалён у пользователя {target_id}.")
+
+@dp.message(Command("check_premium"))
+async def check_premium_cmd(message: types.Message):
+    if message.from_user.id != ADMIN_ID:
+        await message.answer("❌ У вас нет доступа к этой команде.")
+        return
+    
+    parts = message.text.split()
+    if len(parts) != 2:
+        await message.answer(
+            "Использование: /check_premium [user_id]\n"
+            "Пример: /check_premium 123456789"
+        )
+        return
+    
+    try:
+        target_id = int(parts[1])
+    except:
+        await message.answer("❌ user_id должен быть числом.")
+        return
+    
+    is_prem = db.is_premium(target_id)
+    expiry = db.get_premium_expiry(target_id)
+    
+    if is_prem:
+        await message.answer(
+            f"✅ Пользователь {target_id} имеет активный премиум.\n"
+            f"📅 Действует до: {expiry.strftime('%d.%m.%Y %H:%M')}"
+        )
+    else:
+        await message.answer(f"❌ У пользователя {target_id} нет премиума.")
+
+
+# ========== ПРЕМИУМ ==========
+
+@dp.message(Command("premium"))
+@dp.message(lambda m: m.text in ["💎 Премиум", "💎 Premium"])
+async def show_premium_info(message: types.Message):
+    user = db.get_user(message.from_user.id)
+    if not user:
+        await cmd_start(message, None)
+        return
+    
+    lang = user[3]
+    is_premium = db.is_premium(message.from_user.id)
+    
+    if is_premium:
+        expiry = db.get_premium_expiry(message.from_user.id)
+        await message.answer(
+            f"💎 <b>Premium статус</b>\n\n"
+            f"✅ У вас есть активный премиум!\n"
+            f"📅 Действует до: {expiry.strftime('%d.%m.%Y')}\n\n"
+            f"Спасибо! 🚀",
+            parse_mode="HTML",
             reply_markup=get_main_keyboard(lang)
         )
     else:
-        await cmd_start(message, None)
+        await message.answer(
+            "💎 <b>Premium доступ</b>\n\n"
+            "Что вы получаете:\n"
+            "• 🌸 Все 5 цветов для целей\n"
+            "• 📚 Все 30+ видео\n"
+            "• 🚀 Безлимит целей\n\n"
+            "💰 Цена: 400 ₸ / месяц\n\n"
+            "📞 Для оформления: @uuu_ze",
+            parse_mode="HTML",
+            reply_markup=get_main_keyboard(lang)
+        )
 
-# ========== ДОБАВЛЕНИЕ ДЕНЕГ В ЛИЧНУЮ ЦЕЛЬ (ПРОСТОЙ И НАДЁЖНЫЙ ОБРАБОТЧИК) ==========
+@dp.message(Command("myid"))
+async def my_id(message: types.Message):
+    await message.answer(f"Твой ID: `{message.from_user.id}`", parse_mode="Markdown")
+
+
+# ========== НОВАЯ ЦЕЛЬ ИЗ МЕНЮ ==========
+@dp.message(lambda m: m.text in ["➕ Создать новую цель", "➕ Create new goal"])
+async def new_goal_from_menu(message: types.Message, state: FSMContext):
+    user = db.get_user(message.from_user.id)
+    if not user:
+        await cmd_start(message, state)
+        return
+    
+    lang = user[3]
+    await message.answer(
+        get_text(lang, 'enter_goal_name'),
+        reply_markup=get_cancel_keyboard(lang)
+    )
+    await state.set_state(GoalState.name)
+
+
+# ========== ДОБАВЛЕНИЕ ДЕНЕГ В ЛИЧНУЮ ЦЕЛЬ ==========
 
 @dp.message(lambda m: m.text and m.text in ["💰 Add money to goal", "💰 Добавить деньги в цель", "💰 Мақсатқа ақша қосу", "💰 Додати гроші в ціль", "💰 Максатка акча кошуу"])
 async def add_money_to_goal_select(message: types.Message, state: FSMContext):
@@ -1135,6 +1388,7 @@ async def add_money_to_goal_select(message: types.Message, state: FSMContext):
     await state.update_data(goals=goals)
     await message.answer(text, reply_markup=ReplyKeyboardMarkup(keyboard=keyboard_buttons, resize_keyboard=True))
     await state.set_state(GoalState.select_for_add_money)
+
 
 @dp.message(GoalState.select_for_add_money)
 async def add_money_to_goal_amount(message: types.Message, state: FSMContext):
@@ -1220,14 +1474,39 @@ async def add_money_to_goal_execute(message: types.Message, state: FSMContext):
     except:
         await message.answer(get_text(lang, 'invalid_number'))
 
+# ========== ЭТОТ ОБРАБОТЧИК ВСЕГДА ПОСЛЕДНИЙ ==========
+@dp.message()
+async def handle_unknown(message: types.Message):
+    user = db.get_user(message.from_user.id)
+    if user:
+        lang = user[3]
+        await message.answer(
+            get_text(lang, 'error'),
+            reply_markup=get_main_keyboard(lang)
+        )
+    else:
+        await cmd_start(message, None)
+
 async def main():
     print("=" * 50)
     print("🚀 FINANCE BOT STARTED!")
     print("=" * 50)
+    
+    # Устанавливаем команды для меню бота
+    await bot.set_my_commands([
+        types.BotCommand(command="start", description="🚀 Запустить бота"),
+        types.BotCommand(command="new_goal", description="🎯 Создать новую цель"),
+        types.BotCommand(command="ask", description="🤖 Спросить у ИИ ассистента"),
+        types.BotCommand(command="premium", description="💎 Премиум доступ"),
+        types.BotCommand(command="tip", description="💡 Получить финансовый совет"),
+        types.BotCommand(command="video", description="📺 Случайное видео"),
+        types.BotCommand(command="export_csv", description="📁 Экспорт данных в CSV"),
+    ])
+    
     print("✅ Languages: Русский, Қазақша, English, Українська")
     print("✅ Currencies: KZT, RUB, UAH, USD, EUR, BYN, UZS, KGS")
     print("✅ Countries: USA, Kazakhstan, Russia, Ukraine, Belarus, Uzbekistan, Kyrgyzstan")
-    print("✅ Features: Shared Goals, Videos, Tips, Export, Goal Flowers 🌸")
+    print("✅ Features: Shared Goals, Videos, Tips, Export, Goal Flowers 🌸, AI Assistant 🤖, Premium 💎")
     print("=" * 50)
     await dp.start_polling(bot)
 

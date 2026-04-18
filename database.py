@@ -103,6 +103,15 @@ class Database:
             )
         ''')
         
+        # ========== ТАБЛИЦА ДЛЯ ПРЕМИУМ ==========
+        self.cursor.execute('''
+            CREATE TABLE IF NOT EXISTS premium_users (
+                user_id INTEGER PRIMARY KEY,
+                premium_until TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(user_id)
+            )
+        ''')
+        
         self.conn.commit()
         self.init_financial_tips()
         self.init_videos()
@@ -432,6 +441,38 @@ class Database:
         self.cursor.execute('SELECT plant_type FROM goal_plants WHERE goal_id = ?', (goal_id,))
         row = self.cursor.fetchone()
         return row[0] if row else 'lotus'
+    
+    # ========== МЕТОДЫ ДЛЯ ПРЕМИУМ ==========
+    
+    def is_premium(self, user_id):
+        """Проверяет, есть ли у пользователя активный премиум"""
+        self.cursor.execute('SELECT premium_until FROM premium_users WHERE user_id = ?', (user_id,))
+        row = self.cursor.fetchone()
+        if row and row[0]:
+            return datetime.now() < datetime.fromisoformat(row[0])
+        return False
+    
+    def add_premium(self, user_id, days=30):
+        """Добавляет премиум пользователю на указанное количество дней"""
+        until = (datetime.now() + timedelta(days=days)).isoformat()
+        self.cursor.execute('''
+            INSERT OR REPLACE INTO premium_users (user_id, premium_until)
+            VALUES (?, ?)
+        ''', (user_id, until))
+        self.conn.commit()
+    
+    def remove_premium(self, user_id):
+        """Удаляет премиум у пользователя"""
+        self.cursor.execute('DELETE FROM premium_users WHERE user_id = ?', (user_id,))
+        self.conn.commit()
+    
+    def get_premium_expiry(self, user_id):
+        """Возвращает дату истечения премиума"""
+        self.cursor.execute('SELECT premium_until FROM premium_users WHERE user_id = ?', (user_id,))
+        row = self.cursor.fetchone()
+        if row and row[0]:
+            return datetime.fromisoformat(row[0])
+        return None
     
     def close(self):
         self.conn.close()

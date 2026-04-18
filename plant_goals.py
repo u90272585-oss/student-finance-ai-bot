@@ -114,7 +114,6 @@ def get_flower_art(plant_type, progress_percent):
 def get_plant_text(plant_type, progress_percent, current, target, currency_symbol, lang='en'):
     flower_art = get_flower_art(plant_type, progress_percent)
     
-    # Проверяем, есть ли такой язык в PLANT_TYPES, если нет - используем английский
     if f'name_{lang}' not in PLANT_TYPES[plant_type]:
         lang = 'en'
     
@@ -122,7 +121,7 @@ def get_plant_text(plant_type, progress_percent, current, target, currency_symbo
     
     filled = int(progress_percent / 5)
     empty = 20 - filled
-    progress_bar = "🌱" * min(filled, 3) + "░" * empty
+    progress_bar = "🟩" * filled + "⬜" * empty
     
     if progress_percent < 20:
         stage_texts = {
@@ -165,7 +164,6 @@ def get_plant_text(plant_type, progress_percent, current, target, currency_symbo
             'ky': "🌸🌸🌸 ТОЛУК ГҮЛДӨДҮ! Куттуктайбыз! 🎉"
         }
     
-    # Если язык не найден, используем английский
     stage_text = stage_texts.get(lang, stage_texts['en'])
     
     text = f"{flower_art}\n\n"
@@ -178,7 +176,8 @@ def get_plant_text(plant_type, progress_percent, current, target, currency_symbo
     return text
 
 
-def get_plant_choice_keyboard(lang):
+def get_plant_choice_keyboard(lang, premium=False):
+    """Клавиатура для выбора растения"""
     from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
     
     # Если язык не найден, используем английский
@@ -186,9 +185,15 @@ def get_plant_choice_keyboard(lang):
         lang = 'en'
     
     buttons = []
-    for plant_key in ['lotus', 'rose', 'sunflower', 'bamboo', 'hibiscus']:
-        plant_name = PLANT_TYPES[plant_key][f'name_{lang}']
-        buttons.append([KeyboardButton(text=plant_name)])
+    
+    if premium:
+        # Премиум: показываем все 5 цветов
+        for plant_key in ['lotus', 'rose', 'sunflower', 'bamboo', 'hibiscus']:
+            plant_name = PLANT_TYPES[plant_key][f'name_{lang}']
+            buttons.append([KeyboardButton(text=plant_name)])
+    else:
+        # Бесплатный: только лотос
+        buttons.append([KeyboardButton(text=PLANT_TYPES['lotus'][f'name_{lang}'])])
     
     buttons.append([KeyboardButton(text="❌ Cancel")])
     
