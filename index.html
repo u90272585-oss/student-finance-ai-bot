@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>💸 Catch Money</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    body {
+      margin: 0;
+      background: #0f172a;
+      color: white;
+      text-align: center;
+      font-family: Arial;
+    }
+    canvas {
+      background: #1e293b;
+      display: block;
+      margin: 0 auto;
+      border-radius: 10px;
+    }
+    #score {
+      font-size: 20px;
+      margin: 10px;
+    }
+    button {
+      margin-top: 10px;
+      padding: 10px 20px;
+      font-size: 16px;
+      border: none;
+      border-radius: 8px;
+      background: #22c55e;
+      color: white;
+    }
+  </style>
+</head>
+<body>
+
+<h2>💸 Лови деньги</h2>
+<div id="score">Score: 0</div>
+<canvas id="gameCanvas" width="300" height="400"></canvas>
+<button onclick="sendScore()">Отправить результат</button>
+
+<script>
+const tg = window.Telegram.WebApp;
+tg.expand();
+
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+
+let basket = {
+  x: 120,
+  y: 350,
+  width: 60,
+  height: 20
+};
+
+let money = [];
+let score = 0;
+
+function spawnMoney() {
+  money.push({
+    x: Math.random() * 260,
+    y: 0,
+    size: 20,
+    speed: 2 + Math.random() * 2
+  });
+}
+
+function drawBasket() {
+  ctx.fillStyle = "#22c55e";
+  ctx.fillRect(basket.x, basket.y, basket.width, basket.height);
+}
+
+function drawMoney(m) {
+  ctx.fillStyle = "#facc15";
+  ctx.beginPath();
+  ctx.arc(m.x, m.y, m.size / 2, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function update() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  drawBasket();
+
+  for (let i = 0; i < money.length; i++) {
+    let m = money[i];
+    m.y += m.speed;
+
+    drawMoney(m);
+
+    // collision
+    if (
+      m.y + m.size > basket.y &&
+      m.x > basket.x &&
+      m.x < basket.x + basket.width
+    ) {
+      score++;
+      document.getElementById("score").innerText = "Score: " + score;
+      money.splice(i, 1);
+      i--;
+    }
+
+    // remove if missed
+    if (m.y > canvas.height) {
+      money.splice(i, 1);
+      i--;
+    }
+  }
+}
+
+// управление
+document.addEventListener("keydown", (e) => {
+  if (e.key === "ArrowLeft") basket.x -= 20;
+  if (e.key === "ArrowRight") basket.x += 20;
+});
+
+// для телефона (тап)
+canvas.addEventListener("touchstart", (e) => {
+  let touchX = e.touches[0].clientX;
+  basket.x = touchX - basket.width / 2;
+});
+
+// игровой цикл
+setInterval(update, 30);
+setInterval(spawnMoney, 1000);
+
+// отправка результата в бот
+function sendScore() {
+  tg.sendData(JSON.stringify({ score: score }));
+}
+</script>
+
+</body>
+</html>

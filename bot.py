@@ -14,7 +14,7 @@ from aiogram.fsm.context import FSMContext
 import os
 from dotenv import load_dotenv
 from ai_assistant import get_ai_response
-
+from keyboards import get_game_webapp_keyboard
 from database import Database
 from translations import get_text, COUNTRIES, LANGUAGES, CURRENCIES, VIDEO_CATEGORIES
 from keyboards import (
@@ -22,7 +22,9 @@ from keyboards import (
     get_all_currencies_keyboard, get_main_keyboard, get_cancel_keyboard,
     get_categories_keyboard, get_settings_keyboard, get_delete_confirmation_keyboard,
     get_goal_actions_keyboard, get_video_categories_keyboard,
-    get_shared_goals_keyboard, get_shared_goal_actions_keyboard
+    get_shared_goals_keyboard, get_shared_goal_actions_keyboard,
+    get_game_webapp_keyboard, 
+    
 )
 from plant_goals import get_plant_text, get_plant_choice_keyboard, PLANT_TYPES
 
@@ -1473,7 +1475,12 @@ async def add_money_to_goal_execute(message: types.Message, state: FSMContext):
         
     except:
         await message.answer(get_text(lang, 'invalid_number'))
-
+@dp.message(lambda m: m.text and "🎮" in m.text)
+async def open_game(message: types.Message):
+    await message.answer(
+        "🎮 Играй 👇",
+        reply_markup=get_game_webapp_keyboard()
+    )
 # ========== ЭТОТ ОБРАБОТЧИК ВСЕГДА ПОСЛЕДНИЙ ==========
 @dp.message()
 async def handle_unknown(message: types.Message):
