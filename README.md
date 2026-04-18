@@ -1,41 +1,64 @@
 # 💰 Student Finance AI Bot
 
-An AI-powered Telegram bot designed to help students manage their finances, track expenses, and achieve financial goals.
+A Telegram bot designed to help students manage their finances in a simple and interactive way.
+
+---
 
 ## 🚀 Features
 
-- 🌍 Multi-language support (EN / RU / KZ / UA)
-- 💱 Multi-currency support (KZT, USD, EUR, RUB, UAH)
-- 🎯 Financial goals with gamification (plant growth system)
-- 📊 Expense tracking and budgeting
-- 📥 Data export (Excel)
-- 🤖 AI-based financial tips and micro-learning
-- 👥 Shared goals with friends (coming soon)
-- 🔐 Security features (PIN, confirmations, backups)
+- 📊 Expense tracking  
+- 🌱 Financial goals with gamification (plant growth system)  
+- 🌍 Multi-language support (RU / EN / KZ / UA)  
+- 💱 Multi-currency support (KZT / USD / EUR / RUB / UAH)  
+- 📈 Progress visualization  
+- 🔐 Secure data handling  
 
-## 🛠️ Tech Stack
+---
 
-- Python
-- Aiogram
-- SQLite / PostgreSQL
-- Telegram Bot API
+## 🧠 Future Improvements
 
-## 📌 Project Goal
+- 🤖 AI-based financial tips and mini-learning  
+- 👥 Shared financial goals with friends  
+- 💎 Premium features (unlimited categories)  
+- 📤 Export data to Excel
+- Goals
 
-To solve poor financial management among students by providing an easy-to-use and engaging financial assistant.
+---
 
-## ⚙️ Installation
+## 🛠 Technologies
 
-```bash
-git clone https://github.com/your-username/student-finance-ai-bot.git
-cd student-finance-ai-bot
-pip install -r requirements.txt
-python bot.py
+- Python  
+- Aiogram (Telegram Bot API)  
+- SQLite  
+- Async programming  
 
-## 👩‍💻 Author
+---
 
-**Uldana Tolegenkyzy**, Ablikimova Malika  
-Software Engineering Student's @ AlmaU  
+## 📦 Project Structure
 
-🔗 https://github.com/u90272585-oss
-📩 Email: u90258572@gmail.com
+- `bot.py` — main bot logic  
+- `database.py` — database operations  
+- `keyboards.py` — UI buttons  
+- `plant_goals.py` — gamification system  
+- `translations.py` — multi-language support  
+
+---
+
+## 🎯 Purpose
+
+This project aims to solve the problem of poor financial management among students by providing an easy-to-use and engaging tool.
+
+---
+
+## 👥 Team
+
+Scrum Master — Uldana
+- Backend Developer's - Uldana, Malika
+- Developers — Uldana, Malika, Darina, Engineer, AvdoulR. 
+
+---
+
+## 📌 Status
+
+MVP version completed ✔  
+Further improvements planned 🚀
