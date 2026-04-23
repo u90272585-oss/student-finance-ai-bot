@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+
+<style>
+body {
+  margin: 0;
+  background: linear-gradient(#e0f2fe, #f8fafc);
+  font-family: Arial;
+}
+
+#hud {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  right: 10px;
+  display: flex;
+  justify-content: space-between;
+  font-weight: bold;
+}
+
+canvas {
+  display: block;
+  margin: 0 auto;
+}
+
+#controls {
+  text-align: center;
+  margin-top: 10px;
+}
+
+button {
+  padding: 10px;
+  border-radius: 10px;
+  border: none;
+  background: #3b82f6;
+  color: white;
+}
+</style>
+</head>
+
+<body>
+
+<div id="hud">
+  <div>💰 <span id="score">0</span></div>
+  <div>⏱️ <span id="time">30</span></div>
+  <div>🏆 <span id="record">0</span></div>
+</div>
+
+<canvas id="gameCanvas" width="320" height="420"></canvas>
+
+<div id="controls">
+  <button onclick="sendScore()">📤 Send</button>
+</div>
+
+<audio id="coinSound">
+  <source src="https://cdn.pixabay.com/audio/2022/03/10/audio_c1d8b5d6d3.mp3">
+</audio>
+
+<script>
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+
+let basket = { x: 130, y: 380, w: 70, h: 25 };
+let coins = [];
+let particles = [];
+
+let score = 0;
+let timeLeft = 30;
+let gameOver = false;
+let speedMultiplier = 1;
+
+// рекорд
+let record = localStorage.getItem("record") || 0;
+document.getElementById("record").innerText = record;
+
+// управление
+document.addEventListener("mousemove", e => {
+  basket.x = e.clientX - 35;
+});
+document.addEventListener("touchmove", e => {
+  basket.x = e.touches[0].clientX - 35;
+});
+
+// корзина
+function drawBasket() {
+  ctx.fillStyle = "#16a34a";
+  ctx.beginPath();
+  ctx.roundRect(basket.x, basket.y, basket.w, basket.h, 10);
+  ctx.fill();
+
+  ctx.strokeStyle = "#166534";
+  ctx.beginPath();
+  ctx.arc(basket.x + basket.w/2, basket.y, 20, Math.PI, 0);
+  ctx.stroke();
+}
+
+// монета
+function drawCoin(c) {
+  ctx.fillStyle = "#facc15";
+  ctx.beginPath();
+  ctx.arc(c.x, c.y, 10, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = "#78350f";
+  ctx.font = "10px Arial";
+  ctx.fillText("SC", c.x - 7, c.y + 3);
+}
+
+// ✨ частицы
+function spawnParticles(x, y) {
+  for (let i = 0; i < 6; i++) {
+    particles.push({
+      x, y,
+      dx: (Math.random() - 0.5) * 4,
+      dy: (Math.random() - 0.5) * 4,
+      life: 20
+    });
+  }
+}
+
+function drawParticles() {
+  particles.forEach((p, i) => {
+    p.x += p.dx;
+    p.y += p.dy;
+    p.life--;
+
+    ctx.fillStyle = "gold";
+    ctx.fillRect(p.x, p.y, 3, 3);
+
+    if (p.life <= 0) particles.splice(i, 1);
+  });
+}
+
+// спавн
+function spawnCoin() {
+  if (gameOver) return;
+
+  coins.push({
+    x: Math.random() * 300,
+    y: 0,
+    speed: (2 + Math.random() * 2) * speedMultiplier
+  });
+}
+
+// логика
+function update() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  drawBasket();
+
+  coins.forEach((c, i) => {
+    c.y += c.speed;
+    drawCoin(c);
+
+    if (
+      c.y > basket.y &&
+      c.x > basket.x &&
+      c.x < basket.x + basket.w
+    ) {
+      score++;
+      document.getElementById("score").innerText = score;
+
+      // звук
+      document.getElementById("coinSound").play();
+
+      // частицы
+      spawnParticles(c.x, c.y);
+
+      coins.splice(i, 1);
+
+      // ускорение
+      if (score % 10 === 0) {
+        speedMultiplier += 0.2;
+      }
+    }
+
+    if (c.y > canvas.height) {
+      coins.splice(i, 1);
+    }
+  });
+
+  drawParticles();
+
+  if (!gameOver) requestAnimationFrame(update);
+}
+
+// таймер
+setInterval(() => {
+  if (gameOver) return;
+
+  timeLeft--;
+  document.getElementById("time").innerText = timeLeft;
+
+  if (timeLeft <= 0) {
+    gameOver = true;
+  }
+}, 1000);
+
+// спавн
+setInterval(spawnCoin, 600);
+
+update();
+
+// отправка
+function sendScore() {
+  if (score > record) {
+    localStorage.setItem("record", score);
+  }
+
+  const tg = window.Telegram.WebApp;
+  tg.sendData(JSON.stringify({ score: score }));
+}
+</script>
+
+</body>
+</html>
