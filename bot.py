@@ -14,7 +14,6 @@ from aiogram.fsm.context import FSMContext
 import os
 from dotenv import load_dotenv
 from ai_assistant import get_ai_response
-from keyboards import get_game_webapp_keyboard
 from database import Database
 from translations import get_text, COUNTRIES, LANGUAGES, CURRENCIES, VIDEO_CATEGORIES
 from keyboards import (
@@ -23,7 +22,7 @@ from keyboards import (
     get_categories_keyboard, get_settings_keyboard, get_delete_confirmation_keyboard,
     get_goal_actions_keyboard, get_video_categories_keyboard,
     get_shared_goals_keyboard, get_shared_goal_actions_keyboard,
-    get_game_webapp_keyboard, 
+    get_game_webapp_keyboard
     
 )
 from plant_goals import get_plant_text, get_plant_choice_keyboard, PLANT_TYPES
@@ -1475,12 +1474,99 @@ async def add_money_to_goal_execute(message: types.Message, state: FSMContext):
         
     except:
         await message.answer(get_text(lang, 'invalid_number'))
-@dp.message(lambda m: m.text and "🎮" in m.text)
-async def open_game(message: types.Message):
+@dp.message(lambda m: m.text == "🎮 Мини-игра")
+async def show_game(message: types.Message):
+    user = db.get_user(message.from_user.id)
+    if not user:
+        await cmd_start(message, None)
+        return
+    
     await message.answer(
-        "🎮 Играй 👇",
+        "🎮 <b>Лови монеты!</b>\n\n"
+        "Собирай монеты за 30 секунд!\n"
+        "Чем больше поймаешь — тем лучше! 💰",
+        parse_mode="HTML",
         reply_markup=get_game_webapp_keyboard()
     )
+
+@dp.message(lambda m: m.web_app_data is not None)
+async def handle_game_data(message: types.Message):
+    user = db.get_user(message.from_user.id)
+    if not user:
+        return
+    
+    lang = user[3]
+    
+    try:
+        import json
+        data = json.loads(message.web_app_data.data)
+        score = data.get('score', 0)
+        
+        # Проверяем лимит — 1 игра в день
+        if not db.can_play_today(message.from_user.id):
+            await message.answer(
+                f"⏰ Сегодня ты уже играла!\n\n"
+                f"Возвращайся завтра за новыми монетами 😊",
+                reply_markup=get_main_keyboard(lang)
+            )
+            return
+        
+        # Начисляем монеты
+        coins_earned = score  # 1 очко = 1 монета
+        db.add_coins(message.from_user.id, coins_earned)
+        
+        total_coins, _ = db.get_coins(message.from_user.id)
+        
+        # Проверяем достаточно ли монет для скидки
+        discount_text = ""
+        if total_coins >= 500:
+            discount_text = "\n\n🎉 У тебя достаточно монет для скидки 50%!\nНапиши /discount чтобы получить!"
+        elif total_coins >= 200:
+            discount_text = f"\n\n💡 Ещё {500 - total_coins} монет до скидки 50% на премиум!"
+        
+        await message.answer(
+            f"🎮 <b>Игра окончена!</b>\n\n"
+            f"💰 Счёт: <b>{score}</b>\n"
+            f"🪙 Заработано монет: <b>+{coins_earned}</b>\n"
+            f"💼 Всего монет: <b>{total_coins}</b>\n\n"
+            f"{'🏆 Отличный результат!' if score >= 20 else '💪 Попробуй завтра!'}"
+            f"{discount_text}",
+            parse_mode="HTML",
+            reply_markup=get_main_keyboard(lang)
+        )
+    except Exception as e:
+        logger.error(f"Ошибка игры: {e}")
+        await message.answer("Игра завершена!", reply_markup=get_main_keyboard(lang))
+
+@dp.message(Command("discount"))
+async def use_discount(message: types.Message):
+    user = db.get_user(message.from_user.id)
+    if not user:
+        return
+    
+    lang = user[3]
+    total_coins, _ = db.get_coins(message.from_user.id)
+    
+    if total_coins < 500:
+        await message.answer(
+            f"🪙 У тебя <b>{total_coins}</b> монет.\n\n"
+            f"Для скидки 50% нужно <b>500 монет</b>.\n"
+            f"Ещё <b>{500 - total_coins}</b> монет!\n\n"
+            f"🎮 Играй каждый день чтобы накопить!",
+            parse_mode="HTML"
+        )
+        return
+    
+    # Списываем монеты и даём премиум со скидкой
+    if db.use_coins_for_discount(message.from_user.id, 500):
+        await message.answer(
+            f"🎉 <b>Скидка активирована!</b>\n\n"
+            f"💎 Премиум со скидкой 50%: <b>200 ₸</b> вместо 400 ₸\n\n"
+            f"📞 Напиши @uuu_ze для оформления со скидкой!\n"
+            f"Скажи что у тебя есть промокод: <code>COINS500</code>",
+            parse_mode="HTML",
+            reply_markup=get_main_keyboard(lang)
+        )
 # ========== ЭТОТ ОБРАБОТЧИК ВСЕГДА ПОСЛЕДНИЙ ==========
 @dp.message()
 async def handle_unknown(message: types.Message):
@@ -1508,6 +1594,7 @@ async def main():
         types.BotCommand(command="tip", description="💡 Получить финансовый совет"),
         types.BotCommand(command="video", description="📺 Случайное видео"),
         types.BotCommand(command="export_csv", description="📁 Экспорт данных в CSV"),
+        types.BotCommand(command="discount", description="🪙 Обменять монеты на скидку"),  # <- добавь сюда
     ])
     
     print("✅ Languages: Русский, Қазақша, English, Українська")

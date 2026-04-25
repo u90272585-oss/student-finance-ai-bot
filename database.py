@@ -111,7 +111,16 @@ class Database:
                 FOREIGN KEY (user_id) REFERENCES users(user_id)
             )
         ''')
-        
+# ========== ТАБЛИЦА ДЛЯ МОНЕТ ==========
+        self.cursor.execute('''
+            CREATE TABLE IF NOT EXISTS coins (
+                user_id INTEGER PRIMARY KEY,
+                total_coins INTEGER DEFAULT 0,
+                last_game_date TEXT,
+                FOREIGN KEY (user_id) REFERENCES users(user_id)
+            )
+        ''')
+
         self.conn.commit()
         self.init_financial_tips()
         self.init_videos()
@@ -473,6 +482,38 @@ class Database:
         if row and row[0]:
             return datetime.fromisoformat(row[0])
         return None
-    
+
+    def get_coins(self, user_id):
+        self.cursor.execute("SELECT total_coins, last_game_date FROM coins WHERE user_id = ?", (user_id,))
+        row = self.cursor.fetchone()
+        return row if row else (0, None)
+
+    def add_coins(self, user_id, amount):
+        self.cursor.execute('''
+            INSERT INTO coins (user_id, total_coins, last_game_date)
+            VALUES (?, ?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET
+            total_coins = total_coins + ?,
+            last_game_date = ?
+        ''', (user_id, amount, __import__("datetime").datetime.now().strftime("%Y-%m-%d"),
+              amount, __import__("datetime").datetime.now().strftime("%Y-%m-%d")))
+        self.conn.commit()
+
+    def can_play_today(self, user_id):
+        coins, last_game = self.get_coins(user_id)
+        today = __import__("datetime").datetime.now().strftime("%Y-%m-%d")
+        return last_game != today
+
+    def use_coins_for_discount(self, user_id, coins_needed):
+        coins, _ = self.get_coins(user_id)
+        if coins >= coins_needed:
+            self.cursor.execute(
+                "UPDATE coins SET total_coins = total_coins - ? WHERE user_id = ?",
+                (coins_needed, user_id)
+            )
+            self.conn.commit()
+            return True
+        return False
+
     def close(self):
         self.conn.close()
