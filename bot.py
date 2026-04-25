@@ -1481,10 +1481,26 @@ async def show_game(message: types.Message):
         await cmd_start(message, None)
         return
     
+    lang = user[3]
+    
+    # Проверяем лимит ПЕРЕД открытием игры
+    if not db.can_play_today(message.from_user.id):
+        total_coins, _ = db.get_coins(message.from_user.id)
+        await message.answer(
+            f"⏰ <b>Лимит на сегодня исчерпан!</b>\n\n"
+            f"🎮 Сегодня ты уже играла — можно только 1 раз в день.\n\n"
+            f"🪙 Твои монеты: <b>{total_coins}</b>\n\n"
+            f"Возвращайся завтра за новыми монетами! 😊",
+            parse_mode="HTML",
+            reply_markup=get_main_keyboard(lang)
+        )
+        return
+    
     await message.answer(
         "🎮 <b>Лови монеты!</b>\n\n"
         "Собирай монеты за 30 секунд!\n"
-        "Чем больше поймаешь — тем лучше! 💰",
+        "Чем больше поймаешь — тем лучше! 💰\n\n"
+        "⚠️ Помни: только 1 игра в день!",
         parse_mode="HTML",
         reply_markup=get_game_webapp_keyboard()
     )
@@ -1539,7 +1555,9 @@ async def handle_game_data(message: types.Message):
         await message.answer("Игра завершена!", reply_markup=get_main_keyboard(lang))
 
 @dp.message(Command("discount"))
-async def use_discount(message: types.Message):
+async def use_discount(message: types.Message, state: FSMContext):
+    await state.clear()  # <- добавь эту строку
+    
     user = db.get_user(message.from_user.id)
     if not user:
         return
@@ -1553,11 +1571,11 @@ async def use_discount(message: types.Message):
             f"Для скидки 50% нужно <b>500 монет</b>.\n"
             f"Ещё <b>{500 - total_coins}</b> монет!\n\n"
             f"🎮 Играй каждый день чтобы накопить!",
-            parse_mode="HTML"
+            parse_mode="HTML",
+            reply_markup=get_main_keyboard(lang)
         )
         return
     
-    # Списываем монеты и даём премиум со скидкой
     if db.use_coins_for_discount(message.from_user.id, 500):
         await message.answer(
             f"🎉 <b>Скидка активирована!</b>\n\n"
