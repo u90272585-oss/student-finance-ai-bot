@@ -1474,6 +1474,7 @@ async def add_money_to_goal_execute(message: types.Message, state: FSMContext):
         
     except:
         await message.answer(get_text(lang, 'invalid_number'))
+
 @dp.message(lambda m: m.text == "🎮 Мини-игра")
 async def show_game(message: types.Message):
     user = db.get_user(message.from_user.id)
@@ -1554,12 +1555,14 @@ async def handle_game_data(message: types.Message):
         logger.error(f"Ошибка игры: {e}")
         await message.answer("Игра завершена!", reply_markup=get_main_keyboard(lang))
 
+# ========== СКИДКА ЗА МОНЕТЫ ==========
 @dp.message(Command("discount"))
-async def use_discount(message: types.Message, state: FSMContext):
-    await state.clear()  # <- добавь эту строку
+async def discount_command(message: types.Message, state: FSMContext):
+    await state.clear()  # очищаем состояние
     
     user = db.get_user(message.from_user.id)
     if not user:
+        await cmd_start(message, state)
         return
     
     lang = user[3]
@@ -1585,9 +1588,10 @@ async def use_discount(message: types.Message, state: FSMContext):
             parse_mode="HTML",
             reply_markup=get_main_keyboard(lang)
         )
+
 # ========== ЭТОТ ОБРАБОТЧИК ВСЕГДА ПОСЛЕДНИЙ ==========
 @dp.message()
-async def handle_unknown(message: types.Message):
+async def handle_unknown(message: types.Message, state: FSMContext):
     user = db.get_user(message.from_user.id)
     if user:
         lang = user[3]
@@ -1596,9 +1600,10 @@ async def handle_unknown(message: types.Message):
             reply_markup=get_main_keyboard(lang)
         )
     else:
-        await cmd_start(message, None)
+        await cmd_start(message, state)  # <- передаём state вместо None
 
 async def main():
+    await db.connect()
     print("=" * 50)
     print("🚀 FINANCE BOT STARTED!")
     print("=" * 50)
@@ -1612,7 +1617,7 @@ async def main():
         types.BotCommand(command="tip", description="💡 Получить финансовый совет"),
         types.BotCommand(command="video", description="📺 Случайное видео"),
         types.BotCommand(command="export_csv", description="📁 Экспорт данных в CSV"),
-        types.BotCommand(command="discount", description="🪙 Обменять монеты на скидку"),  # <- добавь сюда
+        types.BotCommand(command="discount", description="🪙 Обменять монеты на скидку"),
     ])
     
     print("✅ Languages: Русский, Қазақша, English, Українська")
