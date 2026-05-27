@@ -33,10 +33,40 @@ load_dotenv()
 TOKEN = os.getenv('BOT_TOKEN')
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+import time
+
+# Anti-spam
+user_last_message = {}
+SPAM_TIMEOUT = 1.0
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
+from aiogram import BaseMiddleware
+from typing import Callable, Dict, Any, Awaitable
+
+class AntiSpamMiddleware(BaseMiddleware):
+    async def __call__(
+        self,
+        handler: Callable[[types.TelegramObject, Dict[str, Any]], Awaitable[Any]],
+        event: types.TelegramObject,
+        data: Dict[str, Any]
+    ) -> Any:
+
+        if isinstance(event, types.Message):
+            user_id = event.from_user.id
+            current_time = time.time()
+
+            last_time = user_last_message.get(user_id, 0)
+
+            if current_time - last_time < SPAM_TIMEOUT:
+                await event.answer("⚠️ Не спамьте, пожалуйста!")
+                return
+
+            user_last_message[user_id] = current_time
+
+        return await handler(event, data)
 db = Database()
+dp.message.middleware(AntiSpamMiddleware())
 
 class SetupState(StatesGroup):
     country = State()
@@ -388,7 +418,7 @@ async def transaction_amount(message: types.Message, state: FSMContext):
             reply_markup=get_categories_keyboard(lang)
         )
         await state.set_state(TransactionState.category)
-    except:
+    except ValueError:
         await message.answer(get_text(lang, 'invalid_number'))
 
 @dp.message(TransactionState.category)
@@ -653,7 +683,7 @@ async def new_goal_amount(message: types.Message, state: FSMContext):
             )
         await state.set_state(GoalState.plant_choice)
         
-    except:
+    except ValueError:
         await message.answer(get_text(lang, 'invalid_number'))
 
 
@@ -937,7 +967,7 @@ async def create_shared_goal_target(message: types.Message, state: FSMContext):
             reply_markup=get_shared_goals_keyboard()
         )
         await state.clear()
-    except:
+    except ValueError:
         await message.answer("❌ Please enter a valid number!")
 
 @dp.message(lambda m: m.text in ["🔗 Join Shared Goal", "🔗 Присоединиться"])
@@ -1158,7 +1188,7 @@ async def process_shared_goal_amount(message: types.Message, state: FSMContext):
         await state.clear()
         await shared_goals_menu(message, state)
         
-    except:
+    except ValueError:
         await message.answer("❌ Please enter a valid number!")
 
 @dp.message(lambda m: m.text in [get_text('ru', 'help'), get_text('kz', 'help'), get_text('en', 'help'), get_text('ua', 'help')])
@@ -1230,7 +1260,7 @@ async def give_premium(message: types.Message):
     try:
         target_id = int(parts[1])
         days = int(parts[2])
-    except:
+    except ValueError:
         await message.answer("❌ user_id и дни должны быть числами.")
         return
     
@@ -1263,7 +1293,7 @@ async def remove_premium_cmd(message: types.Message):
     
     try:
         target_id = int(parts[1])
-    except:
+    except ValueError:
         await message.answer("❌ user_id должен быть числом.")
         return
     
@@ -1286,7 +1316,7 @@ async def check_premium_cmd(message: types.Message):
     
     try:
         target_id = int(parts[1])
-    except:
+    except ValueError:
         await message.answer("❌ user_id должен быть числом.")
         return
     
@@ -1473,7 +1503,7 @@ async def add_money_to_goal_execute(message: types.Message, state: FSMContext):
         
         await state.clear()
         
-    except:
+    except ValueError:
         await message.answer(get_text(lang, 'invalid_number'))
 @dp.message(lambda m: m.text and "🎮" in m.text)
 async def open_game(message: types.Message):
