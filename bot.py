@@ -37,6 +37,26 @@ bot = Bot(token=TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
 db = Database()
 
+# Rate limiting — защита от спама
+from collections import defaultdict
+import time
+
+user_last_message = defaultdict(float)
+RATE_LIMIT_SECONDS = 1.0
+
+@dp.message.outer_middleware()
+async def rate_limit_middleware(handler, message, data):
+    user_id = message.from_user.id
+    now = time.time()
+    last = user_last_message[user_id]
+    
+    if now - last < RATE_LIMIT_SECONDS:
+        await message.answer("⏱ Не спамьте, пожалуйста!")
+        return
+    
+    user_last_message[user_id] = now
+    return await handler(message, data)
+
 class SetupState(StatesGroup):
     country = State()
     language = State()
@@ -1629,4 +1649,3 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-    
