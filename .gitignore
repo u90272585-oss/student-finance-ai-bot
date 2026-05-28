@@ -2,3 +2,8 @@
 __pycache__/
 *.pyc
 finance.db
+venv/
+__pycache__/
+*.pyc
+.env
+finance.db
