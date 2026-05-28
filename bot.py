@@ -5,14 +5,34 @@ import io
 import random
 import string
 from datetime import datetime
+import os
+from dotenv import load_dotenv
+
+# ─── ФЕЙКОВЫЙ СЕРВЕР ДЛЯ ОБМАНА RENDER (ДОБАВЛЕНО) ───────────────────
+import threading
+import http.server
+import socketserver
+
+def run_fake_server():
+    # Render по умолчанию проверяет порт 10000 или переменную PORT
+    port = int(os.environ.get("PORT", 10000))
+    handler = http.server.SimpleHTTPRequestHandler
+    # allow_reuse_address=True поможет избежать ошибок "Address already in use" при перезапусках
+    socketserver.TCPServer.allow_reuse_address = True
+    with socketserver.TCPServer(("", port), handler) as httpd:
+        httpd.serve_forever()
+
+# Запускаем сервер в фоновом потоке, чтобы он не блокировал Telegram-бота
+threading.Thread(target=run_fake_server, daemon=True).start()
+# ───────────────────────────────────────────────────────────────────
+
 from aiogram import Bot, Dispatcher, types
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 from aiogram.filters import Command
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.context import FSMContext
-import os
-from dotenv import load_dotenv
+
 from ai_assistant import get_ai_response
 from database import Database
 from translations import get_text, COUNTRIES, LANGUAGES, CURRENCIES, VIDEO_CATEGORIES
@@ -23,8 +43,9 @@ from keyboards import (
     get_goal_actions_keyboard, get_video_categories_keyboard,
     get_shared_goals_keyboard, get_shared_goal_actions_keyboard,
     get_game_webapp_keyboard
-    
 )
+
+# Дальше идет твой стандартный код инициализации бота...
 from plant_goals import get_plant_text, get_plant_choice_keyboard, PLANT_TYPES
 
 load_dotenv()
