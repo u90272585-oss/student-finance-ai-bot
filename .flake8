@@ -1,0 +1,7 @@
+[flake8]
+max-line-length = 120
+exclude = .git,__pycache__,venv,.venv,bot_backup.py
+ignore = E302,E303,W293,W291,W292,E402,E501,W503
+per-file-ignores =
+    Test database.py:F401,F841,E402
+    tests/*:F401,F841,E402
