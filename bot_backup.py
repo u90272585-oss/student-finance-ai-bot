@@ -32,40 +32,10 @@ load_dotenv()
 TOKEN = os.getenv('BOT_TOKEN')
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-import time
-
-# Anti-spam
-user_last_message = {}
-SPAM_TIMEOUT = 1.0
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
-from aiogram import BaseMiddleware
-from typing import Callable, Dict, Any, Awaitable
-
-class AntiSpamMiddleware(BaseMiddleware):
-    async def __call__(
-        self,
-        handler: Callable[[types.TelegramObject, Dict[str, Any]], Awaitable[Any]],
-        event: types.TelegramObject,
-        data: Dict[str, Any]
-    ) -> Any:
-
-        if isinstance(event, types.Message):
-            user_id = event.from_user.id
-            current_time = time.time()
-
-            last_time = user_last_message.get(user_id, 0)
-
-            if current_time - last_time < SPAM_TIMEOUT:
-                await event.answer("⚠️ Не спамьте, пожалуйста!")
-                return
-
-            user_last_message[user_id] = current_time
-
-        return await handler(event, data)
 db = Database()
-dp.message.middleware(AntiSpamMiddleware())
 
 class SetupState(StatesGroup):
     country = State()
@@ -135,9 +105,9 @@ async def cmd_start(message: types.Message, state: FSMContext):
         await state.set_state(SetupState.country)
 
 async def send_daily_tip(message: types.Message, lang: str):
-    tip = await db.get_daily_tip()
+    tip = db.get_daily_tip()
     if tip:
-        video = await db.get_random_video(lang)
+        video = db.get_random_video(lang)
         if video:
             video_title, video_url, duration, description = video
             tip_text = get_text(lang, 'daily_tip_with_video').format(
@@ -154,12 +124,12 @@ async def send_daily_tip(message: types.Message, lang: str):
 
 @dp.message(Command("tip"))
 async def cmd_tip(message: types.Message):
-    user = await db.get_user(message.from_user.id)
+    user = db.get_user(message.from_user.id)
     if user:
         lang = user[3]
-        tip = await db.get_random_tip()
+        tip = db.get_random_tip()
         if tip:
-            video = await db.get_random_video(lang)
+            video = db.get_random_video(lang)
             if video:
                 video_title, video_url, duration, description = video
                 tip_text = get_text(lang, 'daily_tip_with_video').format(
@@ -178,13 +148,13 @@ async def cmd_tip(message: types.Message):
 
 @dp.message(Command("video"))
 async def cmd_random_video(message: types.Message):
-    user = await db.get_user(message.from_user.id)
+    user = db.get_user(message.from_user.id)
     if not user:
         await cmd_start(message, None)
         return
     
     lang = user[3]
-    video = await db.get_random_video(lang)
+    video = db.get_random_video(lang)
     
     if video:
         video_title, video_url, duration, description = video
@@ -200,7 +170,7 @@ async def cmd_random_video(message: types.Message):
 
 @dp.message(lambda m: m.text in [get_text('ru', 'videos'), get_text('en', 'videos'), get_text('kz', 'videos'), get_text('ua', 'videos')])
 async def show_videos(message: types.Message, state: FSMContext):
-    user = await db.get_user(message.from_user.id)
+    user = db.get_user(message.from_user.id)
     if not user:
         await cmd_start(message, state)
         return
@@ -219,7 +189,7 @@ async def show_videos(message: types.Message, state: FSMContext):
 
 @dp.message(VideoState.category)
 async def show_videos_by_category(message: types.Message, state: FSMContext):
-    user = await db.get_user(message.from_user.id)
+    user = db.get_user(message.from_user.id)
     if not user:
         await cmd_start(message, state)
         return
@@ -245,7 +215,7 @@ async def show_videos_by_category(message: types.Message, state: FSMContext):
             await message.answer(get_text(lang, 'select_category'))
             return
     
-    videos = await db.get_videos_by_category(lang, selected_category)
+    videos = db.get_videos_by_category(lang, selected_category)
     
     if not videos:
         await message.answer("❌ No videos found in this category.")
@@ -356,7 +326,7 @@ async def setup_currency(message: types.Message, state: FSMContext):
     user_id = message.from_user.id
     selected_lang = data['language']
     
-    await db.add_user(
+    db.add_user(
         user_id,
         message.from_user.first_name,
         data['country'],
@@ -383,7 +353,7 @@ async def setup_currency(message: types.Message, state: FSMContext):
 @dp.message(lambda m: m.text in [get_text('ru', 'income'), get_text('kz', 'income'), get_text('en', 'income'), get_text('ua', 'income'),
                                    get_text('ru', 'expense'), get_text('kz', 'expense'), get_text('en', 'expense'), get_text('ua', 'expense')])
 async def handle_transaction(message: types.Message, state: FSMContext):
-    user = await db.get_user(message.from_user.id)
+    user = db.get_user(message.from_user.id)
     if not user:
         await cmd_start(message, state)
         return
@@ -401,7 +371,7 @@ async def handle_transaction(message: types.Message, state: FSMContext):
 
 @dp.message(TransactionState.amount)
 async def transaction_amount(message: types.Message, state: FSMContext):
-    user = await db.get_user(message.from_user.id)
+    user = db.get_user(message.from_user.id)
     lang = user[3]
     
     if message.text == get_text(lang, 'cancel'):
@@ -417,12 +387,12 @@ async def transaction_amount(message: types.Message, state: FSMContext):
             reply_markup=get_categories_keyboard(lang)
         )
         await state.set_state(TransactionState.category)
-    except ValueError:
+    except:
         await message.answer(get_text(lang, 'invalid_number'))
 
 @dp.message(TransactionState.category)
 async def transaction_category(message: types.Message, state: FSMContext):
-    user = await db.get_user(message.from_user.id)
+    user = db.get_user(message.from_user.id)
     lang = user[3]
     
     if message.text == get_text(lang, 'cancel'):
@@ -439,7 +409,7 @@ async def transaction_category(message: types.Message, state: FSMContext):
 
 @dp.message(TransactionState.note)
 async def transaction_note(message: types.Message, state: FSMContext):
-    user = await db.get_user(message.from_user.id)
+    user = db.get_user(message.from_user.id)
     lang = user[3]
     currency = user[4]
     
@@ -451,10 +421,10 @@ async def transaction_note(message: types.Message, state: FSMContext):
     data = await state.get_data()
     note = "" if message.text == "/skip" else message.text
     
-    await db.add_transaction(message.from_user.id, data['type'], data['amount'], data['category'], note)
+    db.add_transaction(message.from_user.id, data['type'], data['amount'], data['category'], note)
     
     if data['type'] == 'income':
-        await db.update_goal_progress(message.from_user.id, data['amount'])
+        db.update_goal_progress(message.from_user.id, data['amount'])
     
     await message.answer(
         get_text(lang, 'transaction_saved').format(
@@ -470,14 +440,14 @@ async def transaction_note(message: types.Message, state: FSMContext):
 
 @dp.message(lambda m: m.text in [get_text('ru', 'statistics'), get_text('kz', 'statistics'), get_text('en', 'statistics'), get_text('ua', 'statistics')])
 async def show_statistics(message: types.Message):
-    user = await db.get_user(message.from_user.id)
+    user = db.get_user(message.from_user.id)
     if not user:
         await cmd_start(message, None)
         return
     
     lang = user[3]
     currency = user[4]
-    income, expense, balance, top_cats = await db.get_stats(message.from_user.id)
+    income, expense, balance, top_cats = db.get_stats(message.from_user.id)
     
     text = get_text(lang, 'stats_title').format(days=30) + "\n\n"
     text += get_text(lang, 'stats_income').format(amount=income, currency=CURRENCIES[currency]['symbol']) + "\n"
@@ -497,14 +467,14 @@ async def show_statistics(message: types.Message):
 
 @dp.message(lambda m: m.text in [get_text('ru', 'goals'), get_text('kz', 'goals'), get_text('en', 'goals'), get_text('ua', 'goals')])
 async def show_goals(message: types.Message, state: FSMContext):
-    user = await db.get_user(message.from_user.id)
+    user = db.get_user(message.from_user.id)
     if not user:
         await cmd_start(message, None)
         return
     
     lang = user[3]
     currency = user[4]
-    goals = await db.get_goals(message.from_user.id)
+    goals = db.get_goals(message.from_user.id)
     
     if not goals:
         await message.answer(get_text(lang, 'no_goals'), reply_markup=get_main_keyboard(lang))
@@ -515,7 +485,7 @@ async def show_goals(message: types.Message, state: FSMContext):
     for goal_id, name, target, current in goals:
         percent = (current / target * 100) if target > 0 else 0
         
-        plant_type = await db.get_goal_plant(goal_id)
+        plant_type = db.get_goal_plant(goal_id)
         plant_display = get_plant_text(plant_type, percent, current, target, CURRENCIES[currency]['symbol'], lang)
         
         text += plant_display + "\n" + "─" * 30 + "\n"
@@ -526,13 +496,13 @@ async def show_goals(message: types.Message, state: FSMContext):
 
 @dp.message(lambda m: m.text in [get_text('ru', 'delete_goal'), get_text('kz', 'delete_goal'), get_text('en', 'delete_goal'), get_text('ua', 'delete_goal')])
 async def delete_goal_select(message: types.Message, state: FSMContext):
-    user = await db.get_user(message.from_user.id)
+    user = db.get_user(message.from_user.id)
     if not user:
         await cmd_start(message, state)
         return
     
     lang = user[3]
-    goals = await db.get_goals(message.from_user.id)
+    goals = db.get_goals(message.from_user.id)
     
     if not goals:
         await message.answer(get_text(lang, 'no_goals'), reply_markup=get_main_keyboard(lang))
@@ -553,7 +523,7 @@ async def delete_goal_select(message: types.Message, state: FSMContext):
 
 @dp.message(GoalState.select_for_delete)
 async def delete_goal_confirm(message: types.Message, state: FSMContext):
-    user = await db.get_user(message.from_user.id)
+    user = db.get_user(message.from_user.id)
     lang = user[3]
     
     if message.text == get_text(lang, 'cancel'):
@@ -583,7 +553,7 @@ async def delete_goal_confirm(message: types.Message, state: FSMContext):
 
 @dp.message(GoalState.confirm_delete)
 async def delete_goal_execute(message: types.Message, state: FSMContext):
-    user = await db.get_user(message.from_user.id)
+    user = db.get_user(message.from_user.id)
     lang = user[3]
     
     if message.text == get_text(lang, 'confirm_yes'):
@@ -591,7 +561,7 @@ async def delete_goal_execute(message: types.Message, state: FSMContext):
         goal = data.get('goal_to_delete')
         
         if goal:
-            await db.delete_goal(goal[0])
+            db.delete_goal(goal[0])
             await message.answer(
                 get_text(lang, 'goal_deleted').format(name=goal[1]),
                 reply_markup=get_main_keyboard(lang)
@@ -606,7 +576,7 @@ async def delete_goal_execute(message: types.Message, state: FSMContext):
 
 @dp.message(Command("new_goal"))
 async def new_goal_start(message: types.Message, state: FSMContext):
-    user = await db.get_user(message.from_user.id)
+    user = db.get_user(message.from_user.id)
     if not user:
         await cmd_start(message, state)
         return
@@ -620,7 +590,7 @@ async def new_goal_start(message: types.Message, state: FSMContext):
 
 @dp.message(GoalState.name)
 async def new_goal_name(message: types.Message, state: FSMContext):
-    user = await db.get_user(message.from_user.id)
+    user = db.get_user(message.from_user.id)
     lang = user[3]
     
     if message.text == get_text(lang, 'cancel'):
@@ -637,7 +607,7 @@ async def new_goal_name(message: types.Message, state: FSMContext):
 
 @dp.message(GoalState.amount)
 async def new_goal_amount(message: types.Message, state: FSMContext):
-    user = await db.get_user(message.from_user.id)
+    user = db.get_user(message.from_user.id)
     lang = user[3]
     currency = user[4]
     
@@ -651,8 +621,8 @@ async def new_goal_amount(message: types.Message, state: FSMContext):
         data = await state.get_data()
         
         # Проверка лимита целей для бесплатных
-        goals = await db.get_goals(message.from_user.id)
-        is_premium = await db.is_premium(message.from_user.id)
+        goals = db.get_goals(message.from_user.id)
+        is_premium = db.is_premium(message.from_user.id)
         
         if not is_premium and len(goals) >= 3:
             await message.answer(
@@ -664,7 +634,7 @@ async def new_goal_amount(message: types.Message, state: FSMContext):
             await state.clear()
             return
         
-        goal_id = await db.add_goal(message.from_user.id, data['name'], amount)
+        goal_id = db.add_goal(message.from_user.id, data['name'], amount)
         await state.update_data(goal_id=goal_id, goal_amount=amount, goal_name=data['name'])
         
         if is_premium:
@@ -682,13 +652,13 @@ async def new_goal_amount(message: types.Message, state: FSMContext):
             )
         await state.set_state(GoalState.plant_choice)
         
-    except ValueError:
+    except:
         await message.answer(get_text(lang, 'invalid_number'))
 
 
 @dp.message(GoalState.plant_choice)
 async def goal_plant_choice(message: types.Message, state: FSMContext):
-    user = await db.get_user(message.from_user.id)
+    user = db.get_user(message.from_user.id)
     lang = user[3]
     currency = user[4]
     
@@ -712,7 +682,7 @@ async def goal_plant_choice(message: types.Message, state: FSMContext):
         )
         return  # остаёмся в состоянии plant_choice
     
-    is_premium = await db.is_premium(message.from_user.id)
+    is_premium = db.is_premium(message.from_user.id)
     premium_plants = ['rose', 'sunflower', 'bamboo', 'hibiscus']
     
     selected_plant = None
@@ -737,7 +707,7 @@ async def goal_plant_choice(message: types.Message, state: FSMContext):
     goal_name = data['goal_name']
     amount = data['goal_amount']
     
-    await db.set_goal_plant(goal_id, selected_plant)
+    db.set_goal_plant(goal_id, selected_plant)
     plant_text = get_plant_text(selected_plant, 0, 0, amount, CURRENCIES[currency]['symbol'], lang)
     
     await message.answer(
@@ -753,13 +723,13 @@ async def goal_plant_choice(message: types.Message, state: FSMContext):
 
 @dp.message(Command("export_csv"))
 async def export_csv(message: types.Message):
-    user = await db.get_user(message.from_user.id)
+    user = db.get_user(message.from_user.id)
     if not user:
         await cmd_start(message, None)
         return
     
     lang = user[3]
-    transactions = await db.get_all_transactions(message.from_user.id)
+    transactions = db.get_all_transactions(message.from_user.id)
     
     if not transactions:
         await message.answer(get_text(lang, 'no_transactions'))
@@ -783,7 +753,7 @@ async def export_csv(message: types.Message):
 
 @dp.message(lambda m: m.text in [get_text('ru', 'settings'), get_text('kz', 'settings'), get_text('en', 'settings'), get_text('ua', 'settings')])
 async def show_settings(message: types.Message, state: FSMContext):
-    user = await db.get_user(message.from_user.id)
+    user = db.get_user(message.from_user.id)
     if not user:
         await cmd_start(message, state)
         return
@@ -797,7 +767,7 @@ async def show_settings(message: types.Message, state: FSMContext):
 
 @dp.message(lambda m: m.text in [get_text('ru', 'delete_all_data'), get_text('kz', 'delete_all_data'), get_text('en', 'delete_all_data'), get_text('ua', 'delete_all_data')])
 async def delete_all_data_start(message: types.Message, state: FSMContext):
-    user = await db.get_user(message.from_user.id)
+    user = db.get_user(message.from_user.id)
     lang = user[3]
     
     await message.answer(
@@ -809,7 +779,7 @@ async def delete_all_data_start(message: types.Message, state: FSMContext):
 
 @dp.message(SettingsState.confirm_delete_all)
 async def delete_all_data_execute(message: types.Message, state: FSMContext):
-    user = await db.get_user(message.from_user.id)
+    user = db.get_user(message.from_user.id)
     lang = user[3]
     
     if message.text == get_text(lang, 'confirm_yes'):
@@ -828,7 +798,7 @@ async def delete_all_data_execute(message: types.Message, state: FSMContext):
 
 @dp.message(lambda m: m.text in [get_text('ru', 'change_language'), get_text('kz', 'change_language'), get_text('en', 'change_language'), get_text('ua', 'change_language')])
 async def change_language_start(message: types.Message, state: FSMContext):
-    user = await db.get_user(message.from_user.id)
+    user = db.get_user(message.from_user.id)
     lang = user[3]
     
     await message.answer(
@@ -839,7 +809,7 @@ async def change_language_start(message: types.Message, state: FSMContext):
 
 @dp.message(SettingsState.language)
 async def change_language_set(message: types.Message, state: FSMContext):
-    user = await db.get_user(message.from_user.id)
+    user = db.get_user(message.from_user.id)
     lang_name = message.text
     
     lang_code = None
@@ -862,7 +832,7 @@ async def change_language_set(message: types.Message, state: FSMContext):
 
 @dp.message(lambda m: m.text in [get_text('ru', 'change_currency'), get_text('kz', 'change_currency'), get_text('en', 'change_currency'), get_text('ua', 'change_currency')])
 async def change_currency_start(message: types.Message, state: FSMContext):
-    user = await db.get_user(message.from_user.id)
+    user = db.get_user(message.from_user.id)
     lang = user[3]
     
     await message.answer(
@@ -873,7 +843,7 @@ async def change_currency_start(message: types.Message, state: FSMContext):
 
 @dp.message(SettingsState.currency)
 async def change_currency_set(message: types.Message, state: FSMContext):
-    user = await db.get_user(message.from_user.id)
+    user = db.get_user(message.from_user.id)
     lang = user[3]
     currency_name = message.text
     
@@ -905,7 +875,7 @@ async def change_currency_set(message: types.Message, state: FSMContext):
 
 @dp.message(lambda m: m.text in ["👥 Shared Goals", "👥 Общие цели"])
 async def shared_goals_menu(message: types.Message, state: FSMContext):
-    user = await db.get_user(message.from_user.id)
+    user = db.get_user(message.from_user.id)
     if not user:
         await cmd_start(message, state)
         return
@@ -918,7 +888,7 @@ async def shared_goals_menu(message: types.Message, state: FSMContext):
 
 @dp.message(lambda m: m.text in ["➕ Create Shared Goal", "➕ Создать общую цель"])
 async def create_shared_goal_start(message: types.Message, state: FSMContext):
-    user = await db.get_user(message.from_user.id)
+    user = db.get_user(message.from_user.id)
     lang = user[3]
     
     await message.answer("🎯 Enter the name of your shared goal (e.g., 'Trip to Bali'):", reply_markup=get_cancel_keyboard(lang))
@@ -926,7 +896,7 @@ async def create_shared_goal_start(message: types.Message, state: FSMContext):
 
 @dp.message(SharedGoalState.create_name)
 async def create_shared_goal_name(message: types.Message, state: FSMContext):
-    user = await db.get_user(message.from_user.id)
+    user = db.get_user(message.from_user.id)
     lang = user[3]
     
     if message.text == get_text(lang, 'cancel'):
@@ -940,7 +910,7 @@ async def create_shared_goal_name(message: types.Message, state: FSMContext):
 
 @dp.message(SharedGoalState.create_target)
 async def create_shared_goal_target(message: types.Message, state: FSMContext):
-    user = await db.get_user(message.from_user.id)
+    user = db.get_user(message.from_user.id)
     lang = user[3]
     currency = user[4]
     
@@ -966,12 +936,12 @@ async def create_shared_goal_target(message: types.Message, state: FSMContext):
             reply_markup=get_shared_goals_keyboard()
         )
         await state.clear()
-    except ValueError:
+    except:
         await message.answer("❌ Please enter a valid number!")
 
 @dp.message(lambda m: m.text in ["🔗 Join Shared Goal", "🔗 Присоединиться"])
 async def join_shared_goal_start(message: types.Message, state: FSMContext):
-    user = await db.get_user(message.from_user.id)
+    user = db.get_user(message.from_user.id)
     lang = user[3]
     
     await message.answer("🔑 Enter the invite code shared by your friend:", reply_markup=get_cancel_keyboard(lang))
@@ -979,7 +949,7 @@ async def join_shared_goal_start(message: types.Message, state: FSMContext):
 
 @dp.message(SharedGoalState.join_goal)
 async def join_shared_goal_execute(message: types.Message, state: FSMContext):
-    user = await db.get_user(message.from_user.id)
+    user = db.get_user(message.from_user.id)
     lang = user[3]
     currency = user[4]
     
@@ -1011,7 +981,7 @@ async def join_shared_goal_execute(message: types.Message, state: FSMContext):
             joiner_name = message.from_user.first_name or "Кто-то"
             joiner_username = f"@{message.from_user.username}" if message.from_user.username else ""
             
-            creator = await db.get_user(creator_id)
+            creator = db.get_user(creator_id)
             creator_currency = CURRENCIES[creator[4]]['symbol'] if creator else CURRENCIES[currency]['symbol']
             
             await bot.send_message(
@@ -1030,7 +1000,7 @@ async def join_shared_goal_execute(message: types.Message, state: FSMContext):
     await state.clear()
 @dp.message(lambda m: m.text in ["📋 My Shared Goals", "📋 Мои общие цели"])
 async def list_shared_goals(message: types.Message, state: FSMContext):
-    user = await db.get_user(message.from_user.id)
+    user = db.get_user(message.from_user.id)
     lang = user[3]
     currency = user[4]
     
@@ -1068,7 +1038,7 @@ async def list_shared_goals(message: types.Message, state: FSMContext):
 
 @dp.message(SharedGoalState.select_for_add)
 async def select_shared_goal_action(message: types.Message, state: FSMContext):
-    user = await db.get_user(message.from_user.id)
+    user = db.get_user(message.from_user.id)
     lang = user[3]
     currency = user[4]
     
@@ -1101,7 +1071,7 @@ async def select_shared_goal_action(message: types.Message, state: FSMContext):
 
 @dp.message(SharedGoalState.add_money)
 async def add_money_to_shared_goal(message: types.Message, state: FSMContext):
-    user = await db.get_user(message.from_user.id)
+    user = db.get_user(message.from_user.id)
     lang = user[3]
     currency = user[4]
     
@@ -1127,7 +1097,7 @@ async def add_money_to_shared_goal(message: types.Message, state: FSMContext):
 
 @dp.message(SharedGoalState.enter_amount)
 async def process_shared_goal_amount(message: types.Message, state: FSMContext):
-    user = await db.get_user(message.from_user.id)
+    user = db.get_user(message.from_user.id)
     lang = user[3]
     currency = user[4]
     
@@ -1187,12 +1157,12 @@ async def process_shared_goal_amount(message: types.Message, state: FSMContext):
         await state.clear()
         await shared_goals_menu(message, state)
         
-    except ValueError:
+    except:
         await message.answer("❌ Please enter a valid number!")
 
 @dp.message(lambda m: m.text in [get_text('ru', 'help'), get_text('kz', 'help'), get_text('en', 'help'), get_text('ua', 'help')])
 async def show_help(message: types.Message):
-    user = await db.get_user(message.from_user.id)
+    user = db.get_user(message.from_user.id)
     if not user:
         await cmd_start(message, None)
         return
@@ -1206,7 +1176,7 @@ async def show_help(message: types.Message):
 
 @dp.message(lambda m: m.text in [get_text('ru', 'main_menu'), get_text('kz', 'main_menu'), get_text('en', 'main_menu'), get_text('ua', 'main_menu')])
 async def back_to_main(message: types.Message):
-    user = await db.get_user(message.from_user.id)
+    user = db.get_user(message.from_user.id)
     if user:
         lang = user[3]
         await message.answer(
@@ -1217,7 +1187,7 @@ async def back_to_main(message: types.Message):
 # ========== ИИ-АССИСТЕНТ ==========
 @dp.message(Command("ask"))
 async def ask_ai(message: types.Message):
-    user = await db.get_user(message.from_user.id)
+    user = db.get_user(message.from_user.id)
     if not user:
         await cmd_start(message, None)
         return
@@ -1259,16 +1229,16 @@ async def give_premium(message: types.Message):
     try:
         target_id = int(parts[1])
         days = int(parts[2])
-    except ValueError:
+    except:
         await message.answer("❌ user_id и дни должны быть числами.")
         return
     
-    user = await db.get_user(target_id)
+    user = db.get_user(target_id)
     if not user:
         await message.answer(f"❌ Пользователь {target_id} не найден в базе.")
         return
     
-    await db.add_premium(target_id, days)
+    db.add_premium(target_id, days)
     await message.answer(
         f"✅ Премиум выдан!\n\n"
         f"👤 Пользователь: {target_id}\n"
@@ -1292,11 +1262,11 @@ async def remove_premium_cmd(message: types.Message):
     
     try:
         target_id = int(parts[1])
-    except ValueError:
+    except:
         await message.answer("❌ user_id должен быть числом.")
         return
     
-    await db.remove_premium(target_id)
+    db.remove_premium(target_id)
     await message.answer(f"✅ Премиум удалён у пользователя {target_id}.")
 
 @dp.message(Command("check_premium"))
@@ -1315,12 +1285,12 @@ async def check_premium_cmd(message: types.Message):
     
     try:
         target_id = int(parts[1])
-    except ValueError:
+    except:
         await message.answer("❌ user_id должен быть числом.")
         return
     
-    is_prem = await db.is_premium(target_id)
-    expiry = await db.get_premium_expiry(target_id)
+    is_prem = db.is_premium(target_id)
+    expiry = db.get_premium_expiry(target_id)
     
     if is_prem:
         await message.answer(
@@ -1336,16 +1306,16 @@ async def check_premium_cmd(message: types.Message):
 @dp.message(Command("premium"))
 @dp.message(lambda m: m.text in ["💎 Премиум", "💎 Premium"])
 async def show_premium_info(message: types.Message):
-    user = await db.get_user(message.from_user.id)
+    user = db.get_user(message.from_user.id)
     if not user:
         await cmd_start(message, None)
         return
     
     lang = user[3]
-    is_premium = await db.is_premium(message.from_user.id)
+    is_premium = db.is_premium(message.from_user.id)
     
     if is_premium:
-        expiry = await db.get_premium_expiry(message.from_user.id)
+        expiry = db.get_premium_expiry(message.from_user.id)
         await message.answer(
             f"💎 <b>Premium статус</b>\n\n"
             f"✅ У вас есть активный премиум!\n"
@@ -1375,7 +1345,7 @@ async def my_id(message: types.Message):
 # ========== НОВАЯ ЦЕЛЬ ИЗ МЕНЮ ==========
 @dp.message(lambda m: m.text in ["➕ Создать новую цель", "➕ Create new goal"])
 async def new_goal_from_menu(message: types.Message, state: FSMContext):
-    user = await db.get_user(message.from_user.id)
+    user = db.get_user(message.from_user.id)
     if not user:
         await cmd_start(message, state)
         return
@@ -1392,7 +1362,7 @@ async def new_goal_from_menu(message: types.Message, state: FSMContext):
 
 @dp.message(lambda m: m.text and m.text in ["💰 Add money to goal", "💰 Добавить деньги в цель", "💰 Мақсатқа ақша қосу", "💰 Додати гроші в ціль", "💰 Максатка акча кошуу"])
 async def add_money_to_goal_select(message: types.Message, state: FSMContext):
-    user = await db.get_user(message.from_user.id)
+    user = db.get_user(message.from_user.id)
     if not user:
         await cmd_start(message, state)
         return
@@ -1400,7 +1370,7 @@ async def add_money_to_goal_select(message: types.Message, state: FSMContext):
     lang = user[3]
     currency = user[4]
     
-    goals = await db.get_goals(message.from_user.id)
+    goals = db.get_goals(message.from_user.id)
     
     if not goals:
         await message.answer("❌ You have no goals yet! Create one first.", reply_markup=get_main_keyboard(lang))
@@ -1423,7 +1393,7 @@ async def add_money_to_goal_select(message: types.Message, state: FSMContext):
 
 @dp.message(GoalState.select_for_add_money)
 async def add_money_to_goal_amount(message: types.Message, state: FSMContext):
-    user = await db.get_user(message.from_user.id)
+    user = db.get_user(message.from_user.id)
     lang = user[3]
     currency = user[4]
     
@@ -1455,7 +1425,7 @@ async def add_money_to_goal_amount(message: types.Message, state: FSMContext):
 
 @dp.message(GoalState.enter_add_amount)
 async def add_money_to_goal_execute(message: types.Message, state: FSMContext):
-    user = await db.get_user(message.from_user.id)
+    user = db.get_user(message.from_user.id)
     lang = user[3]
     currency = user[4]
     
@@ -1480,7 +1450,7 @@ async def add_money_to_goal_execute(message: types.Message, state: FSMContext):
         db.conn.commit()
         
         percent = (new_current / target * 100) if target > 0 else 0
-        plant_type = await db.get_goal_plant(goal_id)
+        plant_type = db.get_goal_plant(goal_id)
         
         plant_display = get_plant_text(plant_type, percent, new_current, target, CURRENCIES[currency]['symbol'], lang)
         
@@ -1502,12 +1472,12 @@ async def add_money_to_goal_execute(message: types.Message, state: FSMContext):
         
         await state.clear()
         
-    except ValueError:
+    except:
         await message.answer(get_text(lang, 'invalid_number'))
 
 @dp.message(lambda m: m.text == "🎮 Мини-игра")
 async def show_game(message: types.Message):
-    user = await db.get_user(message.from_user.id)
+    user = db.get_user(message.from_user.id)
     if not user:
         await cmd_start(message, None)
         return
@@ -1515,8 +1485,8 @@ async def show_game(message: types.Message):
     lang = user[3]
     
     # Проверяем лимит ПЕРЕД открытием игры
-    if not await db.can_play_today(message.from_user.id):
-        total_coins, _ = await db.get_coins(message.from_user.id)
+    if not db.can_play_today(message.from_user.id):
+        total_coins, _ = db.get_coins(message.from_user.id)
         await message.answer(
             f"⏰ <b>Лимит на сегодня исчерпан!</b>\n\n"
             f"🎮 Сегодня ты уже играла — можно только 1 раз в день.\n\n"
@@ -1550,7 +1520,7 @@ async def handle_game_data(message: types.Message):
         score = data.get('score', 0)
         
         # Проверяем лимит — 1 игра в день
-        if not await db.can_play_today(message.from_user.id):
+        if not db.can_play_today(message.from_user.id):
             await message.answer(
                 f"⏰ Сегодня ты уже играла!\n\n"
                 f"Возвращайся завтра за новыми монетами 😊",
@@ -1560,9 +1530,9 @@ async def handle_game_data(message: types.Message):
         
         # Начисляем монеты
         coins_earned = score  # 1 очко = 1 монета
-        await db.add_coins(message.from_user.id, coins_earned)
+        db.add_coins(message.from_user.id, coins_earned)
         
-        total_coins, _ = await db.get_coins(message.from_user.id)
+        total_coins, _ = db.get_coins(message.from_user.id)
         
         # Проверяем достаточно ли монет для скидки
         discount_text = ""
@@ -1596,7 +1566,7 @@ async def discount_command(message: types.Message, state: FSMContext):
         return
     
     lang = user[3]
-    total_coins, _ = await db.get_coins(message.from_user.id)
+    total_coins, _ = db.get_coins(message.from_user.id)
     
     if total_coins < 500:
         await message.answer(
@@ -1609,7 +1579,7 @@ async def discount_command(message: types.Message, state: FSMContext):
         )
         return
     
-    if await db.use_coins_for_discount(message.from_user.id, 500):
+    if db.use_coins_for_discount(message.from_user.id, 500):
         await message.answer(
             f"🎉 <b>Скидка активирована!</b>\n\n"
             f"💎 Премиум со скидкой 50%: <b>200 ₸</b> вместо 400 ₸\n\n"

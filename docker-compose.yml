@@ -1,9 +1,22 @@
+<<<<<<< HEAD
 version: '3.9'
+=======
+version: '3.8'
+>>>>>>> 25448a4aaada500ce0b5a1e4c2441dd2e0883371
 
 services:
   bot:
     build: .
+<<<<<<< HEAD
     container_name: finance_bot
     restart: always
     env_file:
       - .env
+=======
+    restart: always
+    env_file:
+      - .env
+    volumes:
+      - ./finance.db:/app/finance.db
+      
+>>>>>>> 25448a4aaada500ce0b5a1e4c2441dd2e0883371

@@ -50,8 +50,8 @@ def get_main_keyboard(lang):
         [KeyboardButton(text=get_text(lang, 'income')), KeyboardButton(text=get_text(lang, 'expense'))],
         [KeyboardButton(text=get_text(lang, 'goals')), KeyboardButton(text=get_text(lang, 'statistics'))],
         [KeyboardButton(text="👥 Shared Goals"), KeyboardButton(text=get_text(lang, 'videos'))],
-        [KeyboardButton(text="💎 Премиум"), KeyboardButton(text=get_text(lang, 'settings'))],  # 👈 НОВАЯ КНОПКА
-        [KeyboardButton(text=get_text(lang, 'help'))]
+        [KeyboardButton(text="💎 Премиум"), KeyboardButton(text=get_text(lang, 'settings'))],
+        [KeyboardButton(text="🎮 Мини-игра"), KeyboardButton(text=get_text(lang, 'help'))]
     ]
     return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
 
@@ -123,5 +123,16 @@ def get_shared_goal_actions_keyboard():
         [KeyboardButton(text="💰 Add Money")],
         [KeyboardButton(text="📊 View Progress")],
         [KeyboardButton(text="◀️ Back")]
+    ]
+    return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
+
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, WebAppInfo
+
+def get_game_webapp_keyboard():
+    buttons = [
+        [KeyboardButton(
+            text="🎮 Играть",
+            web_app=WebAppInfo(url="https://u90272585-oss.github.io/student-finance-ai-bot/game.html")
+        )]
     ]
     return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
