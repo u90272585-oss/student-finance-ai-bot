@@ -1,4 +1,4 @@
 [flake8]
 max-line-length = 120
 exclude = .git,__pycache__,venv,.venv,bot_backup.py,generate_report.py,generate_report_railway.py,view_db.py,Test database.py
-ignore = E302,E303,W293,W291,W292,E402,E501,W503,E722,E127,E128,E272,E222,E265,E305,F841,F541,F601,F811,F401
+ignore = E302,E303,W293,W291,W292,E402,E501,W503,E722,E127,E128,E272,E222,E265,E305,F841,F541,F601,F811,F401,E261
