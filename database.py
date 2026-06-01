@@ -13,14 +13,14 @@ class Database:
         self.conn = None
         self.cursor = None
         self.pool = None
-        
+
         if not self.use_postgres:
             # SQLite (локально)
             self.conn = sqlite3.connect('finance.db')
             self.cursor = self.conn.cursor()
             self._init_sqlite()
             print("✅ SQLite база данных инициализирована")
-    
+
     async def connect(self):
         """Подключение к PostgreSQL (на Railway)"""
         if self.use_postgres:
@@ -28,7 +28,7 @@ class Database:
             self.pool = await asyncpg.create_pool(database_url)
             await self._init_postgres()
             print("✅ PostgreSQL подключён и таблицы созданы")
-    
+
     async def _init_postgres(self):
         """Создание таблиц в PostgreSQL"""
         async with self.pool.acquire() as conn:
@@ -123,14 +123,14 @@ class Database:
                     category TEXT
                 )
             ''')
-            
+
             # Проверяем, есть ли данные
             count = await conn.fetchval("SELECT COUNT(*) FROM users")
             if count == 0:
                 print("⚠️ Таблицы созданы, но пользователей пока нет")
             else:
                 print(f"✅ Найдено пользователей: {count}")
-    
+
     def _init_sqlite(self):
         """Инициализация таблиц в SQLite (локально)"""
         self.cursor.execute('''
@@ -227,7 +227,7 @@ class Database:
         self.conn.commit()
         self._init_financial_tips_sqlite()
         self._init_videos_sqlite()
-    
+
     def _init_financial_tips_sqlite(self):
         """Инициализация финансовых советов в SQLite"""
         self.cursor.execute("SELECT COUNT(*) FROM financial_tips")
@@ -248,7 +248,7 @@ class Database:
                 self.cursor.execute('INSERT INTO financial_tips (tip, video_link, category) VALUES (?, ?, ?)',
                                   (tip, video_link, category))
             self.conn.commit()
-    
+
     def _init_videos_sqlite(self):
         """Инициализация видео в SQLite"""
         self.cursor.execute("SELECT COUNT(*) FROM videos")
@@ -271,7 +271,7 @@ class Database:
                     VALUES (?, ?, ?, ?, ?, ?, ?)
                 ''', video)
             self.conn.commit()
-    
+
     async def add_user(self, user_id, name, country='KZ', language='ru', currency='KZT'):
         if self.use_postgres:
             async with self.pool.acquire() as conn:
@@ -286,7 +286,7 @@ class Database:
                 VALUES (?, ?, ?, ?, ?)
             ''', (user_id, name, country, language, currency))
             self.conn.commit()
-    
+
     async def get_user(self, user_id):
         if self.use_postgres:
             async with self.pool.acquire() as conn:
@@ -294,7 +294,7 @@ class Database:
         else:
             self.cursor.execute('SELECT * FROM users WHERE user_id = ?', (user_id,))
             return self.cursor.fetchone()
-    
+
     async def update_language(self, user_id, language):
         if self.use_postgres:
             async with self.pool.acquire() as conn:
@@ -302,7 +302,7 @@ class Database:
         else:
             self.cursor.execute('UPDATE users SET language = ? WHERE user_id = ?', (language, user_id))
             self.conn.commit()
-    
+
     async def update_currency(self, user_id, currency):
         if self.use_postgres:
             async with self.pool.acquire() as conn:
@@ -310,7 +310,7 @@ class Database:
         else:
             self.cursor.execute('UPDATE users SET currency = ? WHERE user_id = ?', (currency, user_id))
             self.conn.commit()
-    
+
     async def add_transaction(self, user_id, trans_type, amount, category, note=""):
         if self.use_postgres:
             async with self.pool.acquire() as conn:
@@ -324,7 +324,7 @@ class Database:
                 VALUES (?, ?, ?, ?, ?)
             ''', (user_id, trans_type, amount, category, note))
             self.conn.commit()
-    
+
     async def get_all_transactions(self, user_id):
         if self.use_postgres:
             async with self.pool.acquire() as conn:
@@ -338,28 +338,28 @@ class Database:
                 WHERE user_id = ? ORDER BY date DESC
             ''', (user_id,))
             return self.cursor.fetchall()
-    
+
     async def get_stats(self, user_id, days=30):
         date_limit = (datetime.now() - timedelta(days=days)).strftime('%Y-%m-%d')
-        
+
         if self.use_postgres:
             async with self.pool.acquire() as conn:
                 income = await conn.fetchval('''
                     SELECT COALESCE(SUM(amount), 0) FROM transactions 
                     WHERE user_id = $1 AND type = 'income' AND date >= $2
                 ''', user_id, date_limit)
-                
+
                 expense = await conn.fetchval('''
                     SELECT COALESCE(SUM(amount), 0) FROM transactions 
                     WHERE user_id = $1 AND type = 'expense' AND date >= $2
                 ''', user_id, date_limit)
-                
+
                 top_cats = await conn.fetch('''
                     SELECT category, SUM(amount) FROM transactions 
                     WHERE user_id = $1 AND type = 'expense' AND date >= $2
                     GROUP BY category ORDER BY SUM(amount) DESC LIMIT 5
                 ''', user_id, date_limit)
-                
+
                 return income, expense, income - expense, top_cats
         else:
             self.cursor.execute('''
@@ -367,22 +367,22 @@ class Database:
                 WHERE user_id = ? AND type = 'income' AND date >= ?
             ''', (user_id, date_limit))
             income = self.cursor.fetchone()[0]
-            
+
             self.cursor.execute('''
                 SELECT COALESCE(SUM(amount), 0) FROM transactions 
                 WHERE user_id = ? AND type = 'expense' AND date >= ?
             ''', (user_id, date_limit))
             expense = self.cursor.fetchone()[0]
-            
+
             self.cursor.execute('''
                 SELECT category, SUM(amount) FROM transactions 
                 WHERE user_id = ? AND type = 'expense' AND date >= ?
                 GROUP BY category ORDER BY SUM(amount) DESC LIMIT 5
             ''', (user_id, date_limit))
             top_cats = self.cursor.fetchall()
-            
+
             return income, expense, income - expense, top_cats
-    
+
     async def add_goal(self, user_id, name, target):
         if self.use_postgres:
             async with self.pool.acquire() as conn:
@@ -399,7 +399,7 @@ class Database:
             )
             self.conn.commit()
             return self.cursor.lastrowid
-    
+
     async def get_goals(self, user_id):
         if self.use_postgres:
             async with self.pool.acquire() as conn:
@@ -413,7 +413,7 @@ class Database:
                 (user_id,)
             )
             return self.cursor.fetchall()
-    
+
     async def update_goal_progress(self, user_id, amount):
         if self.use_postgres:
             async with self.pool.acquire() as conn:
@@ -438,7 +438,7 @@ class Database:
                         completed_goals.append(goal_id)
             self.conn.commit()
             return completed_goals if completed_goals else None
-    
+
     async def delete_goal(self, goal_id):
         if self.use_postgres:
             async with self.pool.acquire() as conn:
@@ -446,7 +446,7 @@ class Database:
         else:
             self.cursor.execute('DELETE FROM goals WHERE id = ?', (goal_id,))
             self.conn.commit()
-    
+
     async def set_goal_plant(self, goal_id, plant_type):
         if self.use_postgres:
             async with self.pool.acquire() as conn:
@@ -460,7 +460,7 @@ class Database:
                 VALUES (?, ?)
             ''', (goal_id, plant_type))
             self.conn.commit()
-    
+
     async def get_goal_plant(self, goal_id):
         if self.use_postgres:
             async with self.pool.acquire() as conn:
@@ -470,7 +470,7 @@ class Database:
             self.cursor.execute('SELECT plant_type FROM goal_plants WHERE goal_id = ?', (goal_id,))
             row = self.cursor.fetchone()
             return row[0] if row else 'lotus'
-    
+
     async def is_premium(self, user_id):
         if self.use_postgres:
             async with self.pool.acquire() as conn:
@@ -484,7 +484,7 @@ class Database:
             if row and row[0]:
                 return datetime.now() < datetime.fromisoformat(row[0])
             return False
-    
+
     async def add_premium(self, user_id, days=30):
         until = (datetime.now() + timedelta(days=days)).isoformat()
         if self.use_postgres:
@@ -499,7 +499,7 @@ class Database:
                 VALUES (?, ?)
             ''', (user_id, until))
             self.conn.commit()
-    
+
     async def remove_premium(self, user_id):
         if self.use_postgres:
             async with self.pool.acquire() as conn:
@@ -507,7 +507,7 @@ class Database:
         else:
             self.cursor.execute('DELETE FROM premium_users WHERE user_id = ?', (user_id,))
             self.conn.commit()
-    
+
     async def get_premium_expiry(self, user_id):
         if self.use_postgres:
             async with self.pool.acquire() as conn:
@@ -517,7 +517,7 @@ class Database:
             self.cursor.execute('SELECT premium_until FROM premium_users WHERE user_id = ?', (user_id,))
             row = self.cursor.fetchone()
             return datetime.fromisoformat(row[0]) if row and row[0] else None
-    
+
     async def get_coins(self, user_id):
         if self.use_postgres:
             async with self.pool.acquire() as conn:
@@ -527,7 +527,7 @@ class Database:
             self.cursor.execute("SELECT total_coins, last_game_date FROM coins WHERE user_id = ?", (user_id,))
             row = self.cursor.fetchone()
             return row if row else (0, None)
-    
+
     async def add_coins(self, user_id, amount):
         today = datetime.now().strftime("%Y-%m-%d")
         if self.use_postgres:
@@ -547,12 +547,12 @@ class Database:
                 last_game_date = ?
             ''', (user_id, amount, today, amount, today))
             self.conn.commit()
-    
+
     async def can_play_today(self, user_id):
         coins, last_game = await self.get_coins(user_id)
         today = datetime.now().strftime("%Y-%m-%d")
         return last_game != today
-    
+
     async def use_coins_for_discount(self, user_id, coins_needed):
         coins, _ = await self.get_coins(user_id)
         if coins >= coins_needed:
@@ -564,9 +564,9 @@ class Database:
                 self.conn.commit()
             return True
         return False
-    
+
     # ========== МЕТОДЫ ДЛЯ ОБЩИХ ЦЕЛЕЙ ==========
-    
+
     async def create_shared_goal(self, creator_id, name, target, invite_code):
         if self.use_postgres:
             async with self.pool.acquire() as conn:
@@ -593,7 +593,7 @@ class Database:
             ''', (goal_id, creator_id, 0))
             self.conn.commit()
             return goal_id
-    
+
     async def join_shared_goal(self, user_id, invite_code):
         if self.use_postgres:
             async with self.pool.acquire() as conn:
@@ -624,7 +624,7 @@ class Database:
             ''', (goal_id, user_id, 0))
             self.conn.commit()
             return {'goal_id': goal_id, 'name': goal[1], 'target': goal[2], 'current': goal[3], 'creator_id': goal[4]}
-    
+
     async def add_to_shared_goal(self, user_id, goal_id, amount):
         if self.use_postgres:
             async with self.pool.acquire() as conn:
@@ -645,7 +645,7 @@ class Database:
             self.cursor.execute('SELECT target, current FROM shared_goals WHERE id = ?', (goal_id,))
             target, current = self.cursor.fetchone()
             return current >= target
-    
+
     async def get_user_shared_goals(self, user_id):
         if self.use_postgres:
             async with self.pool.acquire() as conn:
@@ -667,7 +667,7 @@ class Database:
                 ORDER BY sg.created_at DESC
             ''', (user_id,))
             return self.cursor.fetchall()
-    
+
     async def get_shared_goal_details(self, goal_id):
         if self.use_postgres:
             async with self.pool.acquire() as conn:
@@ -708,7 +708,7 @@ class Database:
             ''', (goal_id,))
             members = self.cursor.fetchall()
             return {'goal': goal, 'members': members}
-    
+
     async def get_videos_by_category(self, language, category):
         if self.use_postgres:
             async with self.pool.acquire() as conn:
@@ -728,7 +728,7 @@ class Database:
                 LIMIT 10
             ''', (language, category))
             return self.cursor.fetchall()
-    
+
     async def get_random_video(self, language):
         if self.use_postgres:
             async with self.pool.acquire() as conn:
@@ -748,7 +748,7 @@ class Database:
                 LIMIT 1
             ''', (language,))
             return self.cursor.fetchone()
-    
+
     async def get_daily_tip(self):
         day_of_year = datetime.now().timetuple().tm_yday
         if self.use_postgres:
@@ -759,7 +759,7 @@ class Database:
             self.cursor.execute('SELECT tip, video_link FROM financial_tips LIMIT 1 OFFSET ?', (day_of_year % 10,))
             row = self.cursor.fetchone()
             return {'tip': row[0], 'video_link': row[1]} if row else None
-    
+
     async def close(self):
         if self.use_postgres and self.pool:
             await self.pool.close()

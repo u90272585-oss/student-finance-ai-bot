@@ -10,15 +10,15 @@ def get_country_keyboard():
 def get_language_keyboard(country_code='KZ'):
     country = COUNTRIES.get(country_code.lower(), COUNTRIES['kz'])
     available_langs = country['languages']
-    
+
     buttons = []
     for lang_code in available_langs:
         if lang_code in LANGUAGES:
             buttons.append([KeyboardButton(text=LANGUAGES[lang_code]['name'])])
-    
+
     if 'en' not in available_langs:
         buttons.append([KeyboardButton(text=LANGUAGES['en']['name'])])
-    
+
     return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True, one_time_keyboard=True)
 
 def get_currency_keyboard():
@@ -31,11 +31,11 @@ def get_currency_keyboard():
             row = []
     if row:
         buttons.append(row)
-    
+
     more = list(CURRENCIES.items())[4:]
     if more:
         buttons.append([KeyboardButton(text="💰 Другие валюты")])
-    
+
     return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True, one_time_keyboard=True)
 
 def get_all_currencies_keyboard():
@@ -92,7 +92,7 @@ def get_goal_actions_keyboard(lang):
         'ky': '💰 Максатка акча кошуу'
     }
     add_money_text = add_money_texts.get(lang, '💰 Add money to goal')
-    
+
     buttons = [
         [KeyboardButton(text=add_money_text)],  # Добавить деньги
         [KeyboardButton(text="➕ Создать новую цель")],  # НОВАЯ КНОПКА

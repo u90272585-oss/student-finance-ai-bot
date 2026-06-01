@@ -113,16 +113,16 @@ def get_flower_art(plant_type, progress_percent):
 
 def get_plant_text(plant_type, progress_percent, current, target, currency_symbol, lang='en'):
     flower_art = get_flower_art(plant_type, progress_percent)
-    
+
     if f'name_{lang}' not in PLANT_TYPES[plant_type]:
         lang = 'en'
-    
+
     plant_name = PLANT_TYPES[plant_type][f'name_{lang}']
-    
+
     filled = int(progress_percent / 5)
     empty = 20 - filled
     progress_bar = "🟩" * filled + "⬜" * empty
-    
+
     if progress_percent < 20:
         stage_texts = {
             'en': "🌱 Just planted! Keep watering with money!",
@@ -163,29 +163,29 @@ def get_plant_text(plant_type, progress_percent, current, target, currency_symbo
             'ua': "🌸🌸🌸 ПОВНІСТЮ РОЗЦВІВ! Вітаємо! 🎉",
             'ky': "🌸🌸🌸 ТОЛУК ГҮЛДӨДҮ! Куттуктайбыз! 🎉"
         }
-    
+
     stage_text = stage_texts.get(lang, stage_texts['en'])
-    
+
     text = f"{flower_art}\n\n"
     text += f"🎯 <b>{plant_name}</b>\n"
     text += f"💰 {current:,.0f} / {target:,.0f} {currency_symbol}\n"
     text += f"📊 Progress: {progress_percent:.1f}%\n"
     text += f"{progress_bar}\n\n"
     text += f"💚 {stage_text}"
-    
+
     return text
 
 
 def get_plant_choice_keyboard(lang, premium=False):
     """Клавиатура для выбора растения"""
     from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
-    
+
     # Если язык не найден, используем английский
     if f'name_{lang}' not in PLANT_TYPES['lotus']:
         lang = 'en'
-    
+
     buttons = []
-    
+
     if premium:
         # Премиум: показываем все 5 цветов
         for plant_key in ['lotus', 'rose', 'sunflower', 'bamboo', 'hibiscus']:
@@ -194,7 +194,7 @@ def get_plant_choice_keyboard(lang, premium=False):
     else:
         # Бесплатный: только лотос
         buttons.append([KeyboardButton(text=PLANT_TYPES['lotus'][f'name_{lang}'])])
-    
+
     buttons.append([KeyboardButton(text="❌ Cancel")])
-    
+
     return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)

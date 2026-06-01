@@ -1293,7 +1293,7 @@ async def main():
     print("=" * 50)
     print("🚀 FINANCE BOT STARTED!")
     print("=" * 50)
-    
+
     await bot.set_my_commands([
         types.BotCommand(command="start", description="🚀 Запустить бота"),
         types.BotCommand(command="new_goal", description="🎯 Создать новую цель"),
@@ -1304,7 +1304,7 @@ async def main():
         types.BotCommand(command="export_csv", description="📁 Экспорт данных в CSV"),
         types.BotCommand(command="discount", description="🪙 Обменять монеты на скидку"),
     ])
-    
+
     print("✅ Languages: Русский, Қазақша, English, Українська")
     print("✅ Currencies: KZT, RUB, UAH, USD, EUR, BYN, UZS, KGS")
     print("✅ Countries: USA, Kazakhstan, Russia, Ukraine, Belarus, Uzbekistan, Kyrgyzstan")
@@ -1314,12 +1314,12 @@ async def main():
     # ─── АСИНХРОННЫЙ ЗАПУСК ВЕБ-СЕРВЕРА ДЛЯ RENDER ───────────────────
     app = web.Application()
     app.router.add_get('/', handle_render_ping)
-    
+
     port = int(os.environ.get("PORT", 10000))
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, '0.0.0.0', port)
-    
+
     # Запускаем сайт параллельно, не блокируя остальной код
     await site.start()
     print(f"🌍 Асинхронный веб-сервер успешно запущен на порту {port}!")

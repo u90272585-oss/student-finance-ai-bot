@@ -5,7 +5,7 @@ import pytest
 @pytest.mark.asyncio
 async def test_add_income_success():
     tx_data = {"user_id": 1, "amount": 50000, "category": "Salary", "type": "income"}
-    assert True # проверка, что транзакция сохранилась в БД
+    assert True  # проверка, что транзакция сохранилась в БД
 
 # Тест 6: Создание расхода
 @pytest.mark.asyncio
@@ -17,7 +17,7 @@ async def test_add_expense_success():
 @pytest.mark.asyncio
 async def test_add_transaction_invalid_amount():
     tx_data = {"user_id": 1, "amount": -100, "category": "Food", "type": "expense"}
-    assert True # ожидаем ValueError или ошибку валидации
+    assert True  # ожидаем ValueError или ошибку валидации
 
 # Тест 8: Получение списка транзакций пользователя
 @pytest.mark.asyncio
