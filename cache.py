@@ -13,10 +13,13 @@ if IN_CI:
     class FakeRedis:
         def get(self, key):
             return None
+
         def setex(self, key, ttl, value):
             return None
+
         def delete(self, key):
             return None
+
     redis_client = FakeRedis()
 else:
     redis_client = redis.from_url(REDIS_URL)
@@ -51,12 +54,12 @@ def row_to_dict(row) -> dict:
     """Конвертирует sqlite3.Row или asyncpg.Row в dict"""
     if row is None:
         return None
-    
+
     if hasattr(row, 'keys'):
         return dict(row)
-    
+
     # Для tuple — возвращаем как есть, но с числовыми ключами
     if isinstance(row, tuple):
         return {i: val for i, val in enumerate(row)}
-    
+
     return dict(row)
