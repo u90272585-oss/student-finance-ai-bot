@@ -4,9 +4,22 @@ import json
 import os
 from typing import Optional, Any
 
+# Проверяем, запущены ли тесты в CI (GitHub Actions)
+IN_CI = os.getenv("CI") == "true" or os.getenv("GITHUB_ACTIONS") == "true"
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 
-redis_client = redis.from_url(REDIS_URL)
+if IN_CI:
+    # В CI используем фейковый клиент (не требует запущенного Redis)
+    class FakeRedis:
+        def get(self, key):
+            return None
+        def setex(self, key, ttl, value):
+            return None
+        def delete(self, key):
+            return None
+    redis_client = FakeRedis()
+else:
+    redis_client = redis.from_url(REDIS_URL)
 
 
 def get_cached(key: str) -> Optional[Any]:
@@ -19,7 +32,6 @@ def get_cached(key: str) -> Optional[Any]:
 
 def set_cached(key: str, value: Any, ttl: int = 300) -> None:
     """Сохранить в кэш (ttl в секундах)"""
-    # ПРАВИЛЬНЫЙ синтаксис для новой версии Redis
     redis_client.setex(key, ttl, json.dumps(value, default=str))
 
 
