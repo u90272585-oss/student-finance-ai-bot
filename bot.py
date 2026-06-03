@@ -7,6 +7,7 @@ import string
 from datetime import datetime
 import os
 from dotenv import load_dotenv
+from security_logger import log_admin_access, log_security_event
 
 # ─── ИМПОРТ ДЛЯ АСИНХРОННОГО ВЕБ-СЕРВЕРА (ОБМАН RENDER) ──────────────
 from aiohttp import web
@@ -53,6 +54,8 @@ async def rate_limit_middleware(handler, message, data):
     now = time.time()
     last = user_last_message[user_id]
     if now - last < RATE_LIMIT_SECONDS:
+        # Логируем подозрительную активность
+        log_security_event("RATE_LIMIT_HIT", user_id, "telegram", {"limit": RATE_LIMIT_SECONDS})
         await message.answer("⏱ Не спамьте, пожалуйста!")
         return
     user_last_message[user_id] = now
@@ -997,9 +1000,13 @@ async def ask_ai(message: types.Message):
 ADMIN_ID = 1362117255
 @dp.message(Command("give_premium"))
 async def give_premium(message: types.Message):
-    if message.from_user.id != ADMIN_ID:
+    user_id = message.from_user.id
+    if user_id != ADMIN_ID:
+        log_admin_access(user_id, "telegram", "/give_premium", allowed=False)
         await message.answer("❌ У вас нет доступа к этой команде.")
         return
+    log_admin_access(user_id, "telegram", "/give_premium", allowed=True)
+    # остальной код без изменений...
     parts = message.text.split()
     if len(parts) != 3:
         await message.answer("❌ Неверный формат.\n\nИспользование: /give_premium [user_id] [дни]\nПример: /give_premium 123456789 30")
@@ -1019,9 +1026,12 @@ async def give_premium(message: types.Message):
 
 @dp.message(Command("remove_premium"))
 async def remove_premium_cmd(message: types.Message):
-    if message.from_user.id != ADMIN_ID:
+    user_id = message.from_user.id
+    if user_id != ADMIN_ID:
+        log_admin_access(user_id, "telegram", "/remove_premium", allowed=False)
         await message.answer("❌ У вас нет доступа к этой команде.")
         return
+    log_admin_access(user_id, "telegram", "/remove_premium", allowed=True)
     parts = message.text.split()
     if len(parts) != 2:
         await message.answer("❌ Неверный формат.\n\nИспользование: /remove_premium [user_id]\nПример: /remove_premium 123456789")
@@ -1036,9 +1046,12 @@ async def remove_premium_cmd(message: types.Message):
 
 @dp.message(Command("check_premium"))
 async def check_premium_cmd(message: types.Message):
-    if message.from_user.id != ADMIN_ID:
+    user_id = message.from_user.id
+    if user_id != ADMIN_ID:
+        log_admin_access(user_id, "telegram", "/check_premium", allowed=False)
         await message.answer("❌ У вас нет доступа к этой команде.")
         return
+    log_admin_access(user_id, "telegram", "/check_premium", allowed=True)
     parts = message.text.split()
     if len(parts) != 2:
         await message.answer("Использование: /check_premium [user_id]\nПример: /check_premium 123456789")

@@ -3,6 +3,8 @@ import sqlite3
 from datetime import datetime, timedelta
 import random
 import asyncpg
+from cache import get_cached, set_cached, delete_cached, clear_user_cache, row_to_dict
+from security_logger import log_security_event
 
 # Определяем, где мы запущены
 USE_POSTGRES = os.getenv("DATABASE_URL") is not None
@@ -124,6 +126,11 @@ class Database:
                 )
             ''')
 
+            # Индексы для ускорения запросов
+            await conn.execute('CREATE INDEX IF NOT EXISTS idx_transactions_user_id ON transactions(user_id)')
+            await conn.execute('CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(date)')
+            await conn.execute('CREATE INDEX IF NOT EXISTS idx_goals_user_id ON goals(user_id)')
+
             # Проверяем, есть ли данные
             count = await conn.fetchval("SELECT COUNT(*) FROM users")
             if count == 0:
@@ -224,6 +231,12 @@ class Database:
                 category TEXT
             )
         ''')
+
+        # Индексы для ускорения запросов
+        self.cursor.execute('CREATE INDEX IF NOT EXISTS idx_transactions_user_id ON transactions(user_id)')
+        self.cursor.execute('CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(date)')
+        self.cursor.execute('CREATE INDEX IF NOT EXISTS idx_goals_user_id ON goals(user_id)')
+
         self.conn.commit()
         self._init_financial_tips_sqlite()
         self._init_videos_sqlite()
@@ -273,27 +286,66 @@ class Database:
             self.conn.commit()
 
     async def add_user(self, user_id, name, country='KZ', language='ru', currency='KZT'):
+        from security_logger import log_security_event
+
+        # Проверка на дубликат
         if self.use_postgres:
             async with self.pool.acquire() as conn:
+                existing = await conn.fetchrow('SELECT user_id FROM users WHERE user_id = $1', user_id)
+                if existing:
+                    log_security_event(
+                        "DUPLICATE_USER_ATTEMPT",
+                        user_id,
+                        "telegram",
+                        {"name": name, "action": "add_user_ignored"}
+                    )
+                    return
+
                 await conn.execute('''
-                    INSERT INTO users (user_id, name, country, language, currency) 
+                    INSERT INTO users (user_id, name, country, language, currency)
                     VALUES ($1, $2, $3, $4, $5)
                     ON CONFLICT (user_id) DO NOTHING
                 ''', user_id, name, country, language, currency)
         else:
+            # SQLite
+            self.cursor.execute('SELECT user_id FROM users WHERE user_id = ?', (user_id,))
+            existing = self.cursor.fetchone()
+            if existing:
+                log_security_event(
+                    "DUPLICATE_USER_ATTEMPT",
+                    user_id,
+                    "telegram",
+                    {"name": name, "action": "add_user_ignored"}
+                )
+                return
+
             self.cursor.execute('''
-                INSERT OR IGNORE INTO users (user_id, name, country, language, currency) 
+                INSERT OR IGNORE INTO users (user_id, name, country, language, currency)
                 VALUES (?, ?, ?, ?, ?)
             ''', (user_id, name, country, language, currency))
             self.conn.commit()
 
+        # Логируем успешное создание
+        log_security_event("USER_CREATED", user_id, "telegram", {"name": name})
+
     async def get_user(self, user_id):
+        # Проверяем кэш
+        cached_user = get_cached(f"user:{user_id}")
+        if cached_user:
+            return cached_user
+
         if self.use_postgres:
             async with self.pool.acquire() as conn:
-                return await conn.fetchrow('SELECT * FROM users WHERE user_id = $1', user_id)
+                user = await conn.fetchrow('SELECT * FROM users WHERE user_id = $1', user_id)
         else:
             self.cursor.execute('SELECT * FROM users WHERE user_id = ?', (user_id,))
-            return self.cursor.fetchone()
+            user = self.cursor.fetchone()
+
+        # Сохраняем в кэш на 5 минут
+        if user:
+            set_cached(f"user:{user_id}", row_to_dict(user), ttl=300)
+
+        return user
 
     async def update_language(self, user_id, language):
         if self.use_postgres:
@@ -303,6 +355,9 @@ class Database:
             self.cursor.execute('UPDATE users SET language = ? WHERE user_id = ?', (language, user_id))
             self.conn.commit()
 
+        # Очищаем кэш
+        clear_user_cache(user_id)
+
     async def update_currency(self, user_id, currency):
         if self.use_postgres:
             async with self.pool.acquire() as conn:
@@ -311,33 +366,54 @@ class Database:
             self.cursor.execute('UPDATE users SET currency = ? WHERE user_id = ?', (currency, user_id))
             self.conn.commit()
 
+        # Очищаем кэш
+        clear_user_cache(user_id)
+
     async def add_transaction(self, user_id, trans_type, amount, category, note=""):
+        # Валидация
+        if amount <= 0:
+            raise ValueError("Amount must be positive")
+
         if self.use_postgres:
             async with self.pool.acquire() as conn:
                 await conn.execute('''
-                    INSERT INTO transactions (user_id, type, amount, category, note) 
+                    INSERT INTO transactions (user_id, type, amount, category, note)
                     VALUES ($1, $2, $3, $4, $5)
                 ''', user_id, trans_type, amount, category, note)
         else:
             self.cursor.execute('''
-                INSERT INTO transactions (user_id, type, amount, category, note) 
+                INSERT INTO transactions (user_id, type, amount, category, note)
                 VALUES (?, ?, ?, ?, ?)
             ''', (user_id, trans_type, amount, category, note))
             self.conn.commit()
 
+        # Очищаем кэш транзакций
+        delete_cached(f"transactions:{user_id}")
+
     async def get_all_transactions(self, user_id):
+        # Проверяем кэш
+        cached = get_cached(f"transactions:{user_id}")
+        if cached:
+            return cached
+
         if self.use_postgres:
             async with self.pool.acquire() as conn:
-                return await conn.fetch('''
-                    SELECT id, type, amount, category, note, date FROM transactions 
+                transactions = await conn.fetch('''
+                    SELECT id, type, amount, category, note, date FROM transactions
                     WHERE user_id = $1 ORDER BY date DESC
                 ''', user_id)
         else:
             self.cursor.execute('''
-                SELECT id, type, amount, category, note, date FROM transactions 
+                SELECT id, type, amount, category, note, date FROM transactions
                 WHERE user_id = ? ORDER BY date DESC
             ''', (user_id,))
-            return self.cursor.fetchall()
+            transactions = self.cursor.fetchall()
+
+        # Сохраняем в кэш на 1 минуту
+        if transactions:
+            set_cached(f"transactions:{user_id}", [row_to_dict(t) for t in transactions], ttl=60)
+
+        return transactions
 
     async def get_stats(self, user_id, days=30):
         date_limit = (datetime.now() - timedelta(days=days)).strftime('%Y-%m-%d')
@@ -345,17 +421,17 @@ class Database:
         if self.use_postgres:
             async with self.pool.acquire() as conn:
                 income = await conn.fetchval('''
-                    SELECT COALESCE(SUM(amount), 0) FROM transactions 
+                    SELECT COALESCE(SUM(amount), 0) FROM transactions
                     WHERE user_id = $1 AND type = 'income' AND date >= $2
                 ''', user_id, date_limit)
 
                 expense = await conn.fetchval('''
-                    SELECT COALESCE(SUM(amount), 0) FROM transactions 
+                    SELECT COALESCE(SUM(amount), 0) FROM transactions
                     WHERE user_id = $1 AND type = 'expense' AND date >= $2
                 ''', user_id, date_limit)
 
                 top_cats = await conn.fetch('''
-                    SELECT category, SUM(amount) FROM transactions 
+                    SELECT category, SUM(amount) FROM transactions
                     WHERE user_id = $1 AND type = 'expense' AND date >= $2
                     GROUP BY category ORDER BY SUM(amount) DESC LIMIT 5
                 ''', user_id, date_limit)
@@ -363,19 +439,19 @@ class Database:
                 return income, expense, income - expense, top_cats
         else:
             self.cursor.execute('''
-                SELECT COALESCE(SUM(amount), 0) FROM transactions 
+                SELECT COALESCE(SUM(amount), 0) FROM transactions
                 WHERE user_id = ? AND type = 'income' AND date >= ?
             ''', (user_id, date_limit))
             income = self.cursor.fetchone()[0]
 
             self.cursor.execute('''
-                SELECT COALESCE(SUM(amount), 0) FROM transactions 
+                SELECT COALESCE(SUM(amount), 0) FROM transactions
                 WHERE user_id = ? AND type = 'expense' AND date >= ?
             ''', (user_id, date_limit))
             expense = self.cursor.fetchone()[0]
 
             self.cursor.execute('''
-                SELECT category, SUM(amount) FROM transactions 
+                SELECT category, SUM(amount) FROM transactions
                 WHERE user_id = ? AND type = 'expense' AND date >= ?
                 GROUP BY category ORDER BY SUM(amount) DESC LIMIT 5
             ''', (user_id, date_limit))
@@ -387,24 +463,33 @@ class Database:
         if self.use_postgres:
             async with self.pool.acquire() as conn:
                 row = await conn.fetchrow('''
-                    INSERT INTO goals (user_id, name, target) 
+                    INSERT INTO goals (user_id, name, target)
                     VALUES ($1, $2, $3)
                     RETURNING id
                 ''', user_id, name, target)
-                return row['id']
+                goal_id = row['id']
         else:
             self.cursor.execute(
                 'INSERT INTO goals (user_id, name, target) VALUES (?, ?, ?)',
                 (user_id, name, target)
             )
             self.conn.commit()
-            return self.cursor.lastrowid
+            goal_id = self.cursor.lastrowid
+
+        # Очищаем кэш целей
+        delete_cached(f"goals:{user_id}")
+        return goal_id
 
     async def get_goals(self, user_id):
+        # Проверяем кэш
+        cached = get_cached(f"goals:{user_id}")
+        if cached:
+            return cached
+
         if self.use_postgres:
             async with self.pool.acquire() as conn:
-                return await conn.fetch('''
-                    SELECT id, name, target, current FROM goals 
+                goals = await conn.fetch('''
+                    SELECT id, name, target, current FROM goals
                     WHERE user_id = $1 ORDER BY created_at DESC
                 ''', user_id)
         else:
@@ -412,7 +497,13 @@ class Database:
                 'SELECT id, name, target, current FROM goals WHERE user_id = ? ORDER BY created_at DESC',
                 (user_id,)
             )
-            return self.cursor.fetchall()
+            goals = self.cursor.fetchall()
+
+        # Сохраняем в кэш
+        if goals:
+            set_cached(f"goals:{user_id}", [row_to_dict(g) for g in goals], ttl=300)
+
+        return goals
 
     async def update_goal_progress(self, user_id, amount):
         if self.use_postgres:
@@ -425,6 +516,10 @@ class Database:
                         await conn.execute('UPDATE goals SET current = $1 WHERE id = $2', new_current, goal_id)
                         if new_current >= target:
                             completed_goals.append(goal_id)
+
+                # Очищаем кэш целей
+                delete_cached(f"goals:{user_id}")
+
                 return completed_goals if completed_goals else None
         else:
             self.cursor.execute('SELECT id, target, current FROM goals WHERE user_id = ?', (user_id,))
@@ -437,6 +532,10 @@ class Database:
                     if new_current >= target:
                         completed_goals.append(goal_id)
             self.conn.commit()
+
+            # Очищаем кэш целей
+            delete_cached(f"goals:{user_id}")
+
             return completed_goals if completed_goals else None
 
     async def delete_goal(self, goal_id):
@@ -534,7 +633,7 @@ class Database:
             async with self.pool.acquire() as conn:
                 await conn.execute('''
                     INSERT INTO coins (user_id, total_coins, last_game_date) VALUES ($1, $2, $3)
-                    ON CONFLICT (user_id) DO UPDATE SET 
+                    ON CONFLICT (user_id) DO UPDATE SET
                         total_coins = coins.total_coins + $2,
                         last_game_date = $3
                 ''', user_id, amount, today)
@@ -630,7 +729,7 @@ class Database:
             async with self.pool.acquire() as conn:
                 await conn.execute('UPDATE shared_goals SET current = current + $1 WHERE id = $2', amount, goal_id)
                 await conn.execute('''
-                    UPDATE shared_goal_members SET contributed = contributed + $1 
+                    UPDATE shared_goal_members SET contributed = contributed + $1
                     WHERE goal_id = $2 AND user_id = $3
                 ''', amount, goal_id, user_id)
                 row = await conn.fetchrow('SELECT target, current FROM shared_goals WHERE id = $1', goal_id)
@@ -638,7 +737,7 @@ class Database:
         else:
             self.cursor.execute('UPDATE shared_goals SET current = current + ? WHERE id = ?', (amount, goal_id))
             self.cursor.execute('''
-                UPDATE shared_goal_members SET contributed = contributed + ? 
+                UPDATE shared_goal_members SET contributed = contributed + ?
                 WHERE goal_id = ? AND user_id = ?
             ''', (amount, goal_id, user_id))
             self.conn.commit()
@@ -714,7 +813,7 @@ class Database:
             async with self.pool.acquire() as conn:
                 return await conn.fetch('''
                     SELECT id, title, url, duration, description, level
-                    FROM videos 
+                    FROM videos
                     WHERE language = $1 AND category = $2
                     ORDER BY level, id
                     LIMIT 10
@@ -722,7 +821,7 @@ class Database:
         else:
             self.cursor.execute('''
                 SELECT id, title, url, duration, description, level
-                FROM videos 
+                FROM videos
                 WHERE language = ? AND category = ?
                 ORDER BY level, id
                 LIMIT 10
@@ -734,7 +833,7 @@ class Database:
             async with self.pool.acquire() as conn:
                 return await conn.fetchrow('''
                     SELECT title, url, duration, description
-                    FROM videos 
+                    FROM videos
                     WHERE language = $1
                     ORDER BY RANDOM()
                     LIMIT 1
@@ -742,7 +841,7 @@ class Database:
         else:
             self.cursor.execute('''
                 SELECT title, url, duration, description
-                FROM videos 
+                FROM videos
                 WHERE language = ?
                 ORDER BY RANDOM()
                 LIMIT 1
