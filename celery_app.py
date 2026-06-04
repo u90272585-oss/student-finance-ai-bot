@@ -1,44 +1,23 @@
-# cache.py
-import redis
-import json
+from celery import Celery
 import os
-from typing import Optional, Any
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 
-redis_client = redis.from_url(REDIS_URL)
+celery_app = Celery(
+    "finance_bot",
+    broker=REDIS_URL,
+    backend=REDIS_URL
+)
 
+celery_app.conf.update(
+    task_serializer="json",
+    accept_content=["json"],
+    result_serializer="json",
+    timezone="Asia/Almaty",
+    enable_utc=True,
+    task_track_started=True,
+    task_time_limit=30 * 60,
+    task_soft_time_limit=25 * 60,
+)
 
-def get_cached(key: str) -> Optional[Any]:
-    """Получить данные из кэша"""
-    data = redis_client.get(key)
-    if data:
-        return json.loads(data)
-    return None
-
-
-def set_cached(key: str, value: Any, ttl: int = 300) -> None:
-    """Сохранить в кэш (ttl в секундах)"""
-    redis_client.setex(key, ttl, json.dumps(value, default=str))
-
-
-def delete_cached(key: str) -> None:
-    """Удалить из кэша"""
-    redis_client.delete(key)
-
-
-def clear_user_cache(user_id: int) -> None:
-    """Очистить все кэши пользователя"""
-    delete_cached(f"user:{user_id}")
-    delete_cached(f"transactions:{user_id}")
-    delete_cached(f"goals:{user_id}")
-
-
-def row_to_dict(row) -> dict:
-    """Конвертирует sqlite3.Row или asyncpg.Row в dict"""
-    if row is None:
-        return None
-    if hasattr(row, 'keys'):
-        return dict(row)
-    # Для обычного tuple
-    return dict(row)
+import tasks
