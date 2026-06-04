@@ -3,7 +3,13 @@ __pycache__/
 *.pyc
 finance.db
 venv/
+<<<<<<< HEAD
 __pycache__/
 *.pyc
 .env
 finance.db
+=======
+venv/
+__pycache__/
+.pytest_cache/
+>>>>>>> f240d3e83dffb90e3b75096ef4f0ff73ae17cabe

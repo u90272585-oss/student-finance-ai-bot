@@ -117,10 +117,17 @@ def get_plant_text(
 ):
     flower_art = get_flower_art(plant_type, progress_percent)
 
+<<<<<<< HEAD
     if f"name_{lang}" not in PLANT_TYPES[plant_type]:
         lang = "en"
 
     plant_name = PLANT_TYPES[plant_type][f"name_{lang}"]
+=======
+    if f'name_{lang}' not in PLANT_TYPES[plant_type]:
+        lang = 'en'
+
+    plant_name = PLANT_TYPES[plant_type][f'name_{lang}']
+>>>>>>> f240d3e83dffb90e3b75096ef4f0ff73ae17cabe
 
     filled = int(progress_percent / 5)
     empty = 20 - filled
@@ -167,7 +174,11 @@ def get_plant_text(
             "ky": "🌸🌸🌸 ТОЛУК ГҮЛДӨДҮ! Куттуктайбыз! 🎉",
         }
 
+<<<<<<< HEAD
     stage_text = stage_texts.get(lang, stage_texts["en"])
+=======
+    stage_text = stage_texts.get(lang, stage_texts['en'])
+>>>>>>> f240d3e83dffb90e3b75096ef4f0ff73ae17cabe
 
     text = f"{flower_art}\n\n"
     text += f"🎯 <b>{plant_name}</b>\n"
@@ -181,11 +192,19 @@ def get_plant_text(
 
 def get_plant_choice_keyboard(lang, premium=False):
     """Клавиатура для выбора растения"""
+<<<<<<< HEAD
     from aiogram.types import KeyboardButton, ReplyKeyboardMarkup
 
     # Если язык не найден, используем английский
     if f"name_{lang}" not in PLANT_TYPES["lotus"]:
         lang = "en"
+=======
+    from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
+
+    # Если язык не найден, используем английский
+    if f'name_{lang}' not in PLANT_TYPES['lotus']:
+        lang = 'en'
+>>>>>>> f240d3e83dffb90e3b75096ef4f0ff73ae17cabe
 
     buttons = []
 
@@ -196,9 +215,17 @@ def get_plant_choice_keyboard(lang, premium=False):
             buttons.append([KeyboardButton(text=plant_name)])
     else:
         # Бесплатный: только лотос
+<<<<<<< HEAD
         buttons.append(
             [KeyboardButton(text=PLANT_TYPES["lotus"][f"name_{lang}"])])
 
     buttons.append([KeyboardButton(text="❌ Cancel")])
 
     return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
+=======
+        buttons.append([KeyboardButton(text=PLANT_TYPES['lotus'][f'name_{lang}'])])
+
+    buttons.append([KeyboardButton(text="❌ Cancel")])
+
+    return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
+>>>>>>> f240d3e83dffb90e3b75096ef4f0ff73ae17cabe

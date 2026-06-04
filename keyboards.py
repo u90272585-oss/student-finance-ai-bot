@@ -17,6 +17,7 @@ def get_language_keyboard(country_code="KZ"):
     country = COUNTRIES.get(country_code.lower(), COUNTRIES["kz"])
     available_langs = country["languages"]
 
+<<<<<<< HEAD
     buttons = []
     for lang_code in available_langs:
         if lang_code in LANGUAGES:
@@ -29,6 +30,21 @@ def get_language_keyboard(country_code="KZ"):
         keyboard=buttons, resize_keyboard=True, one_time_keyboard=True
     )
 
+=======
+def get_language_keyboard(country_code='KZ'):
+    country = COUNTRIES.get(country_code.lower(), COUNTRIES['kz'])
+    available_langs = country['languages']
+
+    buttons = []
+    for lang_code in available_langs:
+        if lang_code in LANGUAGES:
+            buttons.append([KeyboardButton(text=LANGUAGES[lang_code]['name'])])
+
+    if 'en' not in available_langs:
+        buttons.append([KeyboardButton(text=LANGUAGES['en']['name'])])
+
+    return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True, one_time_keyboard=True)
+>>>>>>> f240d3e83dffb90e3b75096ef4f0ff73ae17cabe
 
 def get_currency_keyboard():
     buttons = []
@@ -45,10 +61,14 @@ def get_currency_keyboard():
     if more:
         buttons.append([KeyboardButton(text="💰 Другие валюты")])
 
+<<<<<<< HEAD
     return ReplyKeyboardMarkup(
         keyboard=buttons, resize_keyboard=True, one_time_keyboard=True
     )
 
+=======
+    return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True, one_time_keyboard=True)
+>>>>>>> f240d3e83dffb90e3b75096ef4f0ff73ae17cabe
 
 def get_all_currencies_keyboard():
     buttons = []
@@ -137,7 +157,11 @@ def get_goal_actions_keyboard(lang):
         "ua": "💰 Додати гроші в ціль",
         "ky": "💰 Максатка акча кошуу",
     }
+<<<<<<< HEAD
     add_money_text = add_money_texts.get(lang, "💰 Add money to goal")
+=======
+    add_money_text = add_money_texts.get(lang, '💰 Add money to goal')
+>>>>>>> f240d3e83dffb90e3b75096ef4f0ff73ae17cabe
 
     buttons = [
         [KeyboardButton(text=add_money_text)],  # Добавить деньги

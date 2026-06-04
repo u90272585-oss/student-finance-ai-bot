@@ -1,0 +1,36 @@
+2026-06-03 23:40:18,182 - security - INFO - {"event_type": "USER_CREATED", "user_id": 1001, "ip": "unknown", "timestamp": "2026-06-03T23:40:18.182803", "details": {"name": "Test User"}}
+2026-06-03 23:40:18,192 - security - INFO - {"event_type": "USER_CREATED", "user_id": 1002, "ip": "unknown", "timestamp": "2026-06-03T23:40:18.192491", "details": {"name": "Goal User"}}
+2026-06-03 23:40:18,194 - security - INFO - {"event_type": "USER_CREATED", "user_id": 1003, "ip": "unknown", "timestamp": "2026-06-03T23:40:18.194755", "details": {"name": "Premium User"}}
+2026-06-03 23:40:18,195 - security - INFO - {"event_type": "USER_CREATED", "user_id": 2001, "ip": "unknown", "timestamp": "2026-06-03T23:40:18.195894", "details": {"name": "User One"}}
+2026-06-03 23:40:18,195 - security - INFO - {"event_type": "USER_CREATED", "user_id": 2002, "ip": "unknown", "timestamp": "2026-06-03T23:40:18.195964", "details": {"name": "User Two"}}
+2026-06-03 23:40:18,197 - security - INFO - {"event_type": "USER_CREATED", "user_id": 3001, "ip": "unknown", "timestamp": "2026-06-03T23:40:18.197116", "details": {"name": "Coin User"}}
+2026-06-03 23:40:18,198 - security - INFO - {"event_type": "USER_CREATED", "user_id": 4001, "ip": "unknown", "timestamp": "2026-06-03T23:40:18.198190", "details": {"name": "Lang User"}}
+2026-06-03 23:40:18,200 - security - INFO - {"event_type": "USER_CREATED", "user_id": 4002, "ip": "unknown", "timestamp": "2026-06-03T23:40:18.200115", "details": {"name": "Curr User"}}
+2026-06-03 23:40:18,202 - security - INFO - {"event_type": "USER_CREATED", "user_id": 4003, "ip": "unknown", "timestamp": "2026-06-03T23:40:18.202040", "details": {"name": "Delete Goal User"}}
+2026-06-03 23:40:18,203 - security - INFO - {"event_type": "USER_CREATED", "user_id": 4004, "ip": "unknown", "timestamp": "2026-06-03T23:40:18.203833", "details": {"name": "Plant Default User"}}
+2026-06-03 23:40:18,205 - security - INFO - {"event_type": "USER_CREATED", "user_id": 4005, "ip": "unknown", "timestamp": "2026-06-03T23:40:18.205066", "details": {"name": "Plant Set User"}}
+2026-06-03 23:40:18,206 - security - INFO - {"event_type": "USER_CREATED", "user_id": 4006, "ip": "unknown", "timestamp": "2026-06-03T23:40:18.206425", "details": {"name": "Premium Remover"}}
+2026-06-03 23:40:18,207 - security - INFO - {"event_type": "USER_CREATED", "user_id": 4007, "ip": "unknown", "timestamp": "2026-06-03T23:40:18.207595", "details": {"name": "Expiry User"}}
+2026-06-03 23:40:18,208 - security - INFO - {"event_type": "USER_CREATED", "user_id": 4008, "ip": "unknown", "timestamp": "2026-06-03T23:40:18.208706", "details": {"name": "Trans User"}}
+2026-06-03 23:40:18,214 - security - INFO - {"event_type": "USER_CREATED", "user_id": 5001, "ip": "unknown", "timestamp": "2026-06-03T23:40:18.214161", "details": {"name": "First User"}}
+2026-06-03 23:40:18,214 - security - INFO - {"event_type": "USER_CREATED", "user_id": 5001, "ip": "unknown", "timestamp": "2026-06-03T23:40:18.214238", "details": {"name": "Duplicate User"}}
+2026-06-03 23:40:18,215 - security - INFO - {"event_type": "USER_CREATED", "user_id": 5002, "ip": "unknown", "timestamp": "2026-06-03T23:40:18.215696", "details": {"name": "No Goals User"}}
+2026-06-03 23:40:18,218 - security - INFO - {"event_type": "USER_CREATED", "user_id": 5003, "ip": "unknown", "timestamp": "2026-06-03T23:40:18.218864", "details": {"name": "Multi Goal User"}}
+2026-06-03 23:46:53,250 - security - INFO - {"event_type": "USER_CREATED", "user_id": 1001, "ip": "telegram", "timestamp": "2026-06-03T23:46:53.250079", "details": {"name": "Test User"}}
+2026-06-03 23:46:53,273 - security - INFO - {"event_type": "USER_CREATED", "user_id": 1002, "ip": "telegram", "timestamp": "2026-06-03T23:46:53.272999", "details": {"name": "Goal User"}}
+2026-06-03 23:46:53,276 - security - INFO - {"event_type": "USER_CREATED", "user_id": 1003, "ip": "telegram", "timestamp": "2026-06-03T23:46:53.276058", "details": {"name": "Premium User"}}
+2026-06-03 23:46:53,277 - security - INFO - {"event_type": "USER_CREATED", "user_id": 2001, "ip": "telegram", "timestamp": "2026-06-03T23:46:53.277447", "details": {"name": "User One"}}
+2026-06-03 23:46:53,277 - security - INFO - {"event_type": "USER_CREATED", "user_id": 2002, "ip": "telegram", "timestamp": "2026-06-03T23:46:53.277766", "details": {"name": "User Two"}}
+2026-06-03 23:46:53,279 - security - INFO - {"event_type": "USER_CREATED", "user_id": 3001, "ip": "telegram", "timestamp": "2026-06-03T23:46:53.279395", "details": {"name": "Coin User"}}
+2026-06-03 23:46:53,280 - security - INFO - {"event_type": "USER_CREATED", "user_id": 4001, "ip": "telegram", "timestamp": "2026-06-03T23:46:53.280627", "details": {"name": "Lang User"}}
+2026-06-03 23:46:53,282 - security - INFO - {"event_type": "USER_CREATED", "user_id": 4002, "ip": "telegram", "timestamp": "2026-06-03T23:46:53.282851", "details": {"name": "Curr User"}}
+2026-06-03 23:46:53,285 - security - INFO - {"event_type": "USER_CREATED", "user_id": 4003, "ip": "telegram", "timestamp": "2026-06-03T23:46:53.285478", "details": {"name": "Delete Goal User"}}
+2026-06-03 23:46:53,287 - security - INFO - {"event_type": "USER_CREATED", "user_id": 4004, "ip": "telegram", "timestamp": "2026-06-03T23:46:53.287532", "details": {"name": "Plant Default User"}}
+2026-06-03 23:46:53,288 - security - INFO - {"event_type": "USER_CREATED", "user_id": 4005, "ip": "telegram", "timestamp": "2026-06-03T23:46:53.288956", "details": {"name": "Plant Set User"}}
+2026-06-03 23:46:53,290 - security - INFO - {"event_type": "USER_CREATED", "user_id": 4006, "ip": "telegram", "timestamp": "2026-06-03T23:46:53.290427", "details": {"name": "Premium Remover"}}
+2026-06-03 23:46:53,291 - security - INFO - {"event_type": "USER_CREATED", "user_id": 4007, "ip": "telegram", "timestamp": "2026-06-03T23:46:53.291814", "details": {"name": "Expiry User"}}
+2026-06-03 23:46:53,293 - security - INFO - {"event_type": "USER_CREATED", "user_id": 4008, "ip": "telegram", "timestamp": "2026-06-03T23:46:53.293238", "details": {"name": "Trans User"}}
+2026-06-03 23:46:53,299 - security - INFO - {"event_type": "USER_CREATED", "user_id": 5001, "ip": "telegram", "timestamp": "2026-06-03T23:46:53.299567", "details": {"name": "First User"}}
+2026-06-03 23:46:53,299 - security - INFO - {"event_type": "DUPLICATE_USER_ATTEMPT", "user_id": 5001, "ip": "telegram", "timestamp": "2026-06-03T23:46:53.299653", "details": {"name": "Duplicate User", "action": "add_user_ignored"}}
+2026-06-03 23:46:53,301 - security - INFO - {"event_type": "USER_CREATED", "user_id": 5002, "ip": "telegram", "timestamp": "2026-06-03T23:46:53.301815", "details": {"name": "No Goals User"}}
+2026-06-03 23:46:53,304 - security - INFO - {"event_type": "USER_CREATED", "user_id": 5003, "ip": "telegram", "timestamp": "2026-06-03T23:46:53.304674", "details": {"name": "Multi Goal User"}}
