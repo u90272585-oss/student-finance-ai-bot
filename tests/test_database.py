@@ -1,13 +1,12 @@
-import unittest
-import sqlite3
+from database import Database
 import os
+import sqlite3
 import sys
+import unittest
 from datetime import datetime, timedelta
 
 # Добавляем путь к проекту
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from database import Database
 
 
 class TestDatabase(unittest.TestCase):
@@ -15,7 +14,7 @@ class TestDatabase(unittest.TestCase):
 
     def setUp(self):
         """Create a test database before each test"""
-        self.test_db_path = 'test_finance.db'
+        self.test_db_path = "test_finance.db"
         self.db = Database.__new__(Database)
         self.db.conn = sqlite3.connect(self.test_db_path)
         self.db.cursor = self.db.conn.cursor()
@@ -66,7 +65,8 @@ class TestDatabase(unittest.TestCase):
     def test_add_transaction(self):
         """Test: transaction is correctly saved"""
         self.db.add_user(123456, "TestUser", "KZ", "ru", "KZT")
-        self.db.add_transaction(123456, "income", 50000, "Salary", "Monthly salary")
+        self.db.add_transaction(123456, "income", 50000,
+                                "Salary", "Monthly salary")
         transactions = self.db.get_all_transactions(123456)
         self.assertEqual(len(transactions), 1)
         self.assertEqual(transactions[0][2], 50000)
@@ -201,7 +201,8 @@ class TestDatabase(unittest.TestCase):
     def test_create_shared_goal(self):
         """Test: shared goal is correctly created"""
         self.db.add_user(123456, "TestUser", "KZ", "ru", "KZT")
-        goal_id = self.db.create_shared_goal(123456, "Trip to Bali", 500000, "ABC12345")
+        goal_id = self.db.create_shared_goal(
+            123456, "Trip to Bali", 500000, "ABC12345")
         self.assertIsNotNone(goal_id)
         print("✅ test_create_shared_goal passed")
 
@@ -223,7 +224,7 @@ class TestDatabase(unittest.TestCase):
         print("✅ test_join_shared_goal_invalid_code passed")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     print("=" * 50)
     print("🧪 Running Unit Tests — Finance Bot Database")
     print("=" * 50)

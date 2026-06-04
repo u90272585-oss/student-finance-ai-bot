@@ -1,7 +1,7 @@
 import sqlite3
 from datetime import datetime
 
-conn = sqlite3.connect('finance.db')
+conn = sqlite3.connect("finance.db")
 cursor = conn.cursor()
 
 # Получаем данные
@@ -18,7 +18,9 @@ users = cursor.fetchall()
 cursor.execute("SELECT COUNT(*) FROM users")
 total_users = cursor.fetchone()[0]
 
-cursor.execute("SELECT COUNT(*) FROM premium_users WHERE premium_until > datetime('now')")
+cursor.execute(
+    "SELECT COUNT(*) FROM premium_users WHERE premium_until > datetime('now')"
+)
 total_premium = cursor.fetchone()[0]
 
 cursor.execute("SELECT COUNT(*) FROM transactions")
@@ -27,7 +29,7 @@ total_transactions = cursor.fetchone()[0]
 cursor.execute("SELECT COUNT(*) FROM goals")
 total_goals = cursor.fetchone()[0]
 
-now = datetime.now().strftime('%d.%m.%Y %H:%M')
+now = datetime.now().strftime("%d.%m.%Y %H:%M")
 
 html = f"""
 <!DOCTYPE html>
@@ -93,7 +95,7 @@ for user in users:
     user_id, name, language, currency, created_at, premium, premium_until = user
     premium_class = "premium-yes" if premium == "✅ Да" else "premium-no"
     premium_date = premium_until[:10] if premium_until else "—"
-    
+
     html += f"""
         <tr>
             <td>{user_id}</td>
@@ -112,9 +114,9 @@ html += """
 </html>
 """
 
-with open('users_report.html', 'w', encoding='utf-8') as f:
+with open("users_report.html", "w", encoding="utf-8") as f:
     f.write(html)
 
 conn.close()
 print(f"✅ Файл users_report.html создан! Пользователей: {total_users}")
-#open users_report.html
+# open users_report.html

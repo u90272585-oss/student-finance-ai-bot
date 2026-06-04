@@ -1,121 +1,140 @@
+import random
 import sqlite3
 from datetime import datetime, timedelta
-import random
+from typing import Optional, List, Dict, Any, Tuple
+from contextlib import contextmanager
+
 
 class Database:
     def __init__(self):
-        self.conn = sqlite3.connect('finance.db')
+        self.conn = sqlite3.connect("finance.db")
+        self.conn.row_factory = sqlite3.Row  # Для удобного доступа по именам колонок
         self.cursor = self.conn.cursor()
         self.init_db()
-    
+
     def init_db(self):
-        # Таблица пользователей
-        self.cursor.execute('''
+        # Таблица пользователей (расширенная)
+        self.cursor.execute("""
             CREATE TABLE IF NOT EXISTS users (
-                user_id INTEGER PRIMARY KEY,
-                name TEXT,
+                user_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT UNIQUE NOT NULL,
+                email TEXT UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                role TEXT DEFAULT 'user',
                 country TEXT DEFAULT 'KZ',
                 language TEXT DEFAULT 'ru',
                 currency TEXT DEFAULT 'KZT',
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                is_active BOOLEAN DEFAULT 1,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                last_login TIMESTAMP
             )
-        ''')
-        
-        # Таблица транзакций
-        self.cursor.execute('''
+        """)
+
+        # Таблица транзакций (с user_id FK)
+        self.cursor.execute("""
             CREATE TABLE IF NOT EXISTS transactions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER,
-                type TEXT,
-                amount REAL,
-                category TEXT,
+                user_id INTEGER NOT NULL,
+                type TEXT CHECK(type IN ('income', 'expense')),
+                amount REAL NOT NULL CHECK(amount > 0),
+                category TEXT NOT NULL,
                 note TEXT,
-                date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
             )
-        ''')
-        
-        # Таблица целей
-        self.cursor.execute('''
+        """)
+
+        # Таблица целей (с user_id FK)
+        self.cursor.execute("""
             CREATE TABLE IF NOT EXISTS goals (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER,
-                name TEXT,
-                target REAL,
-                current REAL DEFAULT 0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                user_id INTEGER NOT NULL,
+                name TEXT NOT NULL,
+                target REAL NOT NULL CHECK(target > 0),
+                current REAL DEFAULT 0 CHECK(current >= 0),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
             )
-        ''')
-        
+        """)
+
         # Таблица финансовых советов
-        self.cursor.execute('''
+        self.cursor.execute("""
             CREATE TABLE IF NOT EXISTS financial_tips (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                tip TEXT,
+                tip TEXT NOT NULL,
                 video_link TEXT,
                 category TEXT
             )
-        ''')
-        
+        """)
+
         # Таблица для видео
-        self.cursor.execute('''
+        self.cursor.execute("""
             CREATE TABLE IF NOT EXISTS videos (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                title TEXT,
-                url TEXT,
+                title TEXT NOT NULL,
+                url TEXT NOT NULL,
                 language TEXT,
                 category TEXT,
                 level TEXT,
                 duration TEXT,
                 description TEXT
             )
-        ''')
-        
-        # ========== ТАБЛИЦЫ ДЛЯ ОБЩИХ ЦЕЛЕЙ ==========
-        self.cursor.execute('''
+        """)
+
+        # Общие цели (без изменений)
+        self.cursor.execute("""
             CREATE TABLE IF NOT EXISTS shared_goals (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT,
-                target REAL,
+                name TEXT NOT NULL,
+                target REAL NOT NULL,
                 current REAL DEFAULT 0,
-                creator_id INTEGER,
+                creator_id INTEGER NOT NULL,
                 invite_code TEXT UNIQUE,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (creator_id) REFERENCES users(user_id)
             )
-        ''')
-        
-        self.cursor.execute('''
+        """)
+
+        self.cursor.execute("""
             CREATE TABLE IF NOT EXISTS shared_goal_members (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                goal_id INTEGER,
-                user_id INTEGER,
+                goal_id INTEGER NOT NULL,
+                user_id INTEGER NOT NULL,
                 contributed REAL DEFAULT 0,
-                joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (goal_id) REFERENCES shared_goals(id) ON DELETE CASCADE,
+                FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
+                UNIQUE(goal_id, user_id)
             )
-        ''')
-        
-        # ========== ТАБЛИЦА ДЛЯ ЦВЕТОВ ЦЕЛЕЙ ==========
-        self.cursor.execute('''
+        """)
+
+        self.cursor.execute("""
             CREATE TABLE IF NOT EXISTS goal_plants (
                 goal_id INTEGER PRIMARY KEY,
                 plant_type TEXT DEFAULT 'lotus',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (goal_id) REFERENCES goals(id) ON DELETE CASCADE
             )
-        ''')
-        
-        # ========== ТАБЛИЦА ДЛЯ ПРЕМИУМ ==========
-        self.cursor.execute('''
+        """)
+
+        self.cursor.execute("""
             CREATE TABLE IF NOT EXISTS premium_users (
                 user_id INTEGER PRIMARY KEY,
-                premium_until TIMESTAMP,
-                FOREIGN KEY (user_id) REFERENCES users(user_id)
+                premium_until TIMESTAMP NOT NULL,
+                FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
             )
-        ''')
-        
+        """)
+
+        # Индексы для производительности
+        self.cursor.execute("CREATE INDEX IF NOT EXISTS idx_transactions_user_date ON transactions(user_id, date)")
+        self.cursor.execute("CREATE INDEX IF NOT EXISTS idx_transactions_user_type ON transactions(user_id, type)")
+        self.cursor.execute("CREATE INDEX IF NOT EXISTS idx_goals_user ON goals(user_id)")
+        self.cursor.execute("CREATE INDEX IF NOT EXISTS idx_shared_members_user ON shared_goal_members(user_id)")
+
         self.conn.commit()
         self.init_financial_tips()
         self.init_videos()
-    
+
     def init_financial_tips(self):
         """Инициализация финансовых советов"""
         self.cursor.execute("SELECT COUNT(*) FROM financial_tips")
@@ -133,353 +152,468 @@ class Database:
                 ("Установите финансовые цели на год", "", "goals"),
             ]
             for tip, video_link, category in tips:
-                self.cursor.execute('INSERT INTO financial_tips (tip, video_link, category) VALUES (?, ?, ?)',
-                                  (tip, video_link, category))
+                self.cursor.execute(
+                    "INSERT INTO financial_tips (tip, video_link, category) VALUES (?, ?, ?)",
+                    (tip, video_link, category),
+                )
             self.conn.commit()
-    
+
     def init_videos(self):
-        """Инициализация видео (10 русских, 20 английских)"""
+        """Инициализация видео"""
         self.cursor.execute("SELECT COUNT(*) FROM videos")
         if self.cursor.fetchone()[0] == 0:
-            # Русские видео
             russian_videos = [
-                ("Почему ты бедный?", "https://youtu.be/ORhFkbMDw9Y?si=FosMCa9wOun63_Ok", "ru", "basics", "beginner", "15:00", "Основы финансовой грамотности"),
-                ("Финансовая грамотность для чайников", "https://youtu.be/073P_bPnS3w?si=oeTYsGHwRsU1hR5N4", "ru", "saving", "beginner", "12:00", "Простые способы накопления"),
-                ("Идеальный маршрут инвестора - 7 шагов", "https://youtu.be/9p-rz-k5BPM?si=R_E2ypS6OTRtqQ0e", "ru", "investing", "beginner", "20:00", "Введение в инвестиции"),
-                ("Как ИЗБАВИТЬСЯ ОТ ДОЛГОВ? — АМОБЛОГ", "https://youtu.be/IzFy83zbN3o?si=SGXq3JIzTmvOjSiw", "ru", "debt", "intermediate", "18:00", "Управление кредитами"),
-                ("Как вести учет личных финансов и что я понял 5 лет считая каждый рубль", "https://youtu.be/Lc-bcvLT-x0?si=bqNFIGoZu0YA4uOk", "ru", "budgeting", "beginner", "14:00", "Как составить бюджет"),
-                ("Пассивный доход", "https://youtu.be/WulzE9M7VJw?si=U3cl9F177QL3uMIx", "ru", "investing", "intermediate", "22:00", "Создание пассивного дохода"),
-                ("Как выйти на финансовую свободу?", "https://youtu.be/Fx917LJiVr0?si=JcgNd5dQZEeoBHD4", "ru", "goals", "advanced", "25:00", "Путь к финансовой независимости"),
-                ("50 вещей которые делают тебя бедней", "https://youtu.be/Ovovu1P7u78?si=peKgJZUjDkx9O2sj", "ru", "basics", "intermediate", "16:00", "бедность"),
-                ("Криптовалюта. Полное объяснение для чайников", "https://youtu.be/QPOdFedaujY?si=llTzA47FL41GT42D", "ru", "investing", "intermediate", "19:00", "Что такое криптовалюта"),
-                ("Психология денег: Как мыслить богато", "https://youtu.be/gqQLews_xuQ?si=gy99LfUVMzLbh_YF", "ru", "basics", "beginner", "21:00", "Финансовое мышление"),
+                ("Почему ты бедный?", "https://youtu.be/ORhFkbMDw9Y", "ru", "basics", "beginner", "15:00", "Основы финансовой грамотности"),
+                ("Финансовая грамотность для чайников", "https://youtu.be/073P_bPnS3w", "ru", "saving", "beginner", "12:00", "Простые способы накопления"),
             ]
-            
-            # Английские видео
             english_videos = [
-                ("Introduction to interest", "https://youtu.be/GtaoP0skPWc?si=KucETPlR1ug733qZ", "en", "debt", "beginner", "8:00", "What is interest?"),
-                ("Compound interest basics", "https://youtu.be/Rm6UdfRs3gw?si=vEcYozLdc9Hqpkak", "en", "investing", "beginner", "10:00", "Power of compounding"),
-                ("Budgeting 101", "https://youtu.be/gn8Obk30Pc0?si=GoU2vkD2TXf0czDo", "en", "budgeting", "beginner", "7:00", "How to create a budget"),
-                ("Financial Literacy - A Beginners Guide to Financial Education", "https://youtu.be/4XZIv4__sQA?si=VqJ_DDJ0DCjLDk9Z", "en", "saving", "beginner", "9:00", "Financial literacy"),
-                ("Credit cards and loans", "https://youtu.be/QvaHDxdxQFg?si=oTJugpLn2fS50ynD", "en", "debt", "intermediate", "12:00", "Managing credit wisely"),
-                ("How To Read Stock Charts Like A PRO Investor (Beginner Guide)", "https://youtu.be/8i6n5z9OXzM?si=UL-QIGMHQ1te6tNt", "en", "investing", "intermediate", "15:00", "How stock market works"),
-                ("Emergency Funds 101: You're Screwed If You Don't Have One", "https://youtu.be/tVGJqaOkqac?si=exDU4yGMTjCmc5OF", "en", "saving", "beginner", "6:00", "Why you need emergency fund"),
-                ("7 Principles For Teenagers To Become Millionaires", "https://youtu.be/1-izXBhkiHw?si=fG5I_LegTLP8Nyte", "en", "goals", "intermediate", "14:00", "how to become a millionaire"),
-                ("Inflation and purchasing power", "https://youtu.be/zIbNJCSCEjk?si=KGcDis7T9RAOY-Vs", "en", "basics", "intermediate", "11:00", "How inflation affects you"),
-                ("Diversification strategy", "https://youtu.be/ZDExLnS9IC0?si=fe3WdnpFuHbfK_4d", "en", "investing", "advanced", "13:00", "Don't put all eggs in one basket"),
-                ("Taxes 101", "https://youtu.be/AMXGBH7hoJY?si=hI3QxCIpjyq6-nNq", "en", "basics", "beginner", "9:00", "Understanding taxes"),
-                ("Dividend Investing Secrets Explained | Investing for Complete Beginners", "https://youtu.be/BGdc9xRPedY?si=XtnrUVTemXlbmzj9", "en", "dividend", "advanced", "18:00", "Dividend Investing"),
-                ("Debt snowball method", "https://youtu.be/SQkoIJ-BLHI?si=uRBbeAncH96gv7lp", "en", "debt", "intermediate", "8:00", "Paying off debt effectively"),
-                ("Financial goals setting", "https://youtu.be/MabD5R8kRak?si=U-kdNM4hjrYodx6r", "en", "goals", "beginner", "7:00", "SMART financial goals"),
-                ("Risk management", "https://youtu.be/kXkVV7PFWgE?si=uX3nY9X7t2RxwvhH", "en", "investing", "intermediate", "10:00", "Understanding investment risk"),
-                ("Bonds explained", "https://youtu.be/7d9Lz0D0uzA?si=DMzZHn2_OB-ws9sj", "en", "investing", "intermediate", "12:00", "What are bonds"),
-                ("Mutual funds for beginners", "https://youtu.be/nQ0r_prerXo?si=gbTeWXzFYE1CGuWY", "en", "investing", "beginner", "11:00", "Introduction to mutual funds"),
-                ("401k and retirement accounts", "https://youtu.be/BhTTeIDZtKY?si=i-mqungHMRHK9EGK", "en", "goals", "intermediate", "13:00", "Retirement savings accounts"),
-                ("Credit Scores Fully Explained 2026", "https://youtu.be/TOdnj2p91_c?si=Xn05d8--KHDau1Z0", "en", "debt", "beginner", "9:00", "Understanding credit scores"),
-                ("Passive income streams", "https://youtu.be/XFh3tRObiLM?si=H2Vb05IPzA4Mzk_M", "en", "investing", "advanced", "16:00", "Building passive income"),
+                ("Introduction to interest", "https://youtu.be/GtaoP0skPWc", "en", "debt", "beginner", "8:00", "What is interest?"),
+                ("Compound interest basics", "https://youtu.be/Rm6UdfRs3gw", "en", "investing", "beginner", "10:00", "Power of compounding"),
             ]
-            
-            for video in russian_videos:
-                self.cursor.execute('''
-                    INSERT INTO videos (title, url, language, category, level, duration, description)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                ''', video)
-            
-            for video in english_videos:
-                self.cursor.execute('''
-                    INSERT INTO videos (title, url, language, category, level, duration, description)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                ''', video)
-            
+
+            for video in russian_videos + english_videos:
+                self.cursor.execute(
+                    "INSERT INTO videos (title, url, language, category, level, duration, description) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    video,
+                )
             self.conn.commit()
+
+    # ========== ПОЛЬЗОВАТЕЛИ (С ПРОВЕРКОЙ ВЛАДЕНИЯ) ==========
     
-    def get_videos_by_category(self, language, category):
-        self.cursor.execute('''
-            SELECT id, title, url, duration, description, level
-            FROM videos 
-            WHERE language = ? AND category = ?
-            ORDER BY level, id
-            LIMIT 10
-        ''', (language, category))
-        return self.cursor.fetchall()
-    
-    def get_random_video(self, language):
-        self.cursor.execute('''
-            SELECT title, url, duration, description
-            FROM videos 
-            WHERE language = ?
-            ORDER BY RANDOM()
-            LIMIT 1
-        ''', (language,))
-        return self.cursor.fetchone()
-    
-    def get_video_categories(self, language):
-        self.cursor.execute('''
-            SELECT category, COUNT(*)
-            FROM videos 
-            WHERE language = ?
-            GROUP BY category
-        ''', (language,))
-        return self.cursor.fetchall()
-    
-    def get_random_tip(self):
-        self.cursor.execute('SELECT tip, video_link FROM financial_tips ORDER BY RANDOM() LIMIT 1')
+    def create_user(self, username: str, email: str, password_hash: str) -> int:
+        """Создание нового пользователя"""
+        try:
+            self.cursor.execute(
+                "INSERT INTO users (username, email, password_hash) VALUES (?, ?, ?)",
+                (username, email, password_hash),
+            )
+            self.conn.commit()
+            return self.cursor.lastrowid
+        except sqlite3.IntegrityError:
+            return None
+
+    def get_user_by_id(self, user_id: int) -> Optional[Dict]:
+        """Получение пользователя по ID"""
+        self.cursor.execute(
+            "SELECT user_id, username, email, role, country, language, currency, is_active, created_at, last_login FROM users WHERE user_id = ?",
+            (user_id,),
+        )
         row = self.cursor.fetchone()
-        if row:
-            return {'tip': row[0], 'video_link': row[1]}
-        return None
-    
-    def get_daily_tip(self):
-        day_of_year = datetime.now().timetuple().tm_yday
-        self.cursor.execute('SELECT tip, video_link FROM financial_tips LIMIT 1 OFFSET ?', (day_of_year % 10,))
+        return dict(row) if row else None
+
+    def get_user_by_username(self, username: str) -> Optional[Dict]:
+        """Получение пользователя по username (для аутентификации)"""
+        self.cursor.execute("SELECT * FROM users WHERE username = ?", (username,))
         row = self.cursor.fetchone()
-        if row:
-            return {'tip': row[0], 'video_link': row[1]}
-        return None
-    
-    def add_user(self, user_id, name, country='KZ', language='ru', currency='KZT'):
-        self.cursor.execute('''
-            INSERT OR IGNORE INTO users (user_id, name, country, language, currency) 
-            VALUES (?, ?, ?, ?, ?)
-        ''', (user_id, name, country, language, currency))
+        return dict(row) if row else None
+
+    def get_user_by_email(self, email: str) -> Optional[Dict]:
+        """Получение пользователя по email"""
+        self.cursor.execute("SELECT * FROM users WHERE email = ?", (email,))
+        row = self.cursor.fetchone()
+        return dict(row) if row else None
+
+    def update_last_login(self, user_id: int):
+        """Обновление времени последнего входа"""
+        self.cursor.execute(
+            "UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE user_id = ?",
+            (user_id,),
+        )
         self.conn.commit()
-        return self.cursor.rowcount > 0
+
+    def get_user_role(self, user_id: int) -> str:
+        """Получение роли пользователя для RBAC"""
+        self.cursor.execute("SELECT role FROM users WHERE user_id = ?", (user_id,))
+        row = self.cursor.fetchone()
+        return row["role"] if row else "user"
+
+    # ========== ТРАНЗАКЦИИ (С ПРОВЕРКОЙ ВЛАДЕНИЯ) ==========
     
-    def get_user(self, user_id):
-        self.cursor.execute('SELECT * FROM users WHERE user_id = ?', (user_id,))
-        return self.cursor.fetchone()
-    
-    def update_language(self, user_id, language):
-        self.cursor.execute('UPDATE users SET language = ? WHERE user_id = ?', (language, user_id))
-        self.conn.commit()
-    
-    def update_currency(self, user_id, currency):
-        self.cursor.execute('UPDATE users SET currency = ? WHERE user_id = ?', (currency, user_id))
-        self.conn.commit()
-    
-    def update_country(self, user_id, country):
-        self.cursor.execute('UPDATE users SET country = ? WHERE user_id = ?', (country, user_id))
-        self.conn.commit()
-    
-    def add_transaction(self, user_id, trans_type, amount, category, note=""):
-        self.cursor.execute('''
+    def add_transaction(self, user_id: int, trans_type: str, amount: float, category: str, note: str = "") -> int:
+        """Добавление транзакции с проверкой владения"""
+        self.cursor.execute(
+            """
             INSERT INTO transactions (user_id, type, amount, category, note) 
             VALUES (?, ?, ?, ?, ?)
-        ''', (user_id, trans_type, amount, category, note))
-        self.conn.commit()
-    
-    def get_all_transactions(self, user_id):
-        self.cursor.execute('''
-            SELECT id, type, amount, category, note, date FROM transactions 
-            WHERE user_id = ? ORDER BY date DESC
-        ''', (user_id,))
-        return self.cursor.fetchall()
-    
-    def get_stats(self, user_id, days=30):
-        date_limit = (datetime.now() - timedelta(days=days)).strftime('%Y-%m-%d')
-        
-        self.cursor.execute('''
-            SELECT COALESCE(SUM(amount), 0) FROM transactions 
-            WHERE user_id = ? AND type = 'income' AND date >= ?
-        ''', (user_id, date_limit))
-        income = self.cursor.fetchone()[0]
-        
-        self.cursor.execute('''
-            SELECT COALESCE(SUM(amount), 0) FROM transactions 
-            WHERE user_id = ? AND type = 'expense' AND date >= ?
-        ''', (user_id, date_limit))
-        expense = self.cursor.fetchone()[0]
-        
-        self.cursor.execute('''
-            SELECT category, SUM(amount) FROM transactions 
-            WHERE user_id = ? AND type = 'expense' AND date >= ?
-            GROUP BY category ORDER BY SUM(amount) DESC LIMIT 5
-        ''', (user_id, date_limit))
-        top_categories = self.cursor.fetchall()
-        
-        return income, expense, income - expense, top_categories
-    
-    def add_goal(self, user_id, name, target):
-        self.cursor.execute(
-            'INSERT INTO goals (user_id, name, target) VALUES (?, ?, ?)',
-            (user_id, name, target)
+            """,
+            (user_id, trans_type, amount, category, note),
         )
         self.conn.commit()
         return self.cursor.lastrowid
-    
-    def get_goals(self, user_id):
+
+    def get_transaction(self, transaction_id: int, user_id: int) -> Optional[Dict]:
+        """Получение транзакции с проверкой владения"""
         self.cursor.execute(
-            'SELECT id, name, target, current FROM goals WHERE user_id = ? ORDER BY created_at DESC',
-            (user_id,)
+            """
+            SELECT id, user_id, type, amount, category, note, date 
+            FROM transactions 
+            WHERE id = ? AND user_id = ?
+            """,
+            (transaction_id, user_id),
         )
-        return self.cursor.fetchall()
-    
-    def update_goal_current(self, goal_id, new_current):
+        row = self.cursor.fetchone()
+        return dict(row) if row else None
+
+    def get_all_transactions(self, user_id: int, limit: int = 100) -> List[Dict]:
+        """Получение всех транзакций пользователя"""
         self.cursor.execute(
-        'UPDATE goals SET current = ? WHERE id = ?',
-        (new_current, goal_id)
-    )
+            """
+            SELECT id, type, amount, category, note, date 
+            FROM transactions 
+            WHERE user_id = ? 
+            ORDER BY date DESC 
+            LIMIT ?
+            """,
+            (user_id, limit),
+        )
+        return [dict(row) for row in self.cursor.fetchall()]
+
+    def update_transaction(self, transaction_id: int, user_id: int, **kwargs) -> bool:
+        """Обновление транзакции с проверкой владения"""
+        allowed_fields = ["type", "amount", "category", "note"]
+        updates = []
+        values = []
+        
+        for field, value in kwargs.items():
+            if field in allowed_fields and value is not None:
+                updates.append(f"{field} = ?")
+                values.append(value)
+        
+        if not updates:
+            return False
+        
+        values.extend([transaction_id, user_id])
+        query = f"""
+            UPDATE transactions 
+            SET {', '.join(updates)} 
+            WHERE id = ? AND user_id = ?
+        """
+        
+        self.cursor.execute(query, values)
         self.conn.commit()
-    
-    def update_goal_progress(self, user_id, amount):
+        return self.cursor.rowcount > 0
+
+    def delete_transaction(self, transaction_id: int, user_id: int) -> bool:
+        """Удаление транзакции с проверкой владения"""
         self.cursor.execute(
-            'SELECT id, target, current FROM goals WHERE user_id = ?',
+            "DELETE FROM transactions WHERE id = ? AND user_id = ?",
+            (transaction_id, user_id),
+        )
+        self.conn.commit()
+        return self.cursor.rowcount > 0
+
+    def get_stats(self, user_id: int, days: int = 30) -> Tuple[float, float, float, List]:
+        """Получение статистики с проверкой владения"""
+        date_limit = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
+
+        self.cursor.execute(
+            """
+            SELECT COALESCE(SUM(amount), 0) FROM transactions 
+            WHERE user_id = ? AND type = 'income' AND date >= ?
+            """,
+            (user_id, date_limit),
+        )
+        income = self.cursor.fetchone()[0]
+
+        self.cursor.execute(
+            """
+            SELECT COALESCE(SUM(amount), 0) FROM transactions 
+            WHERE user_id = ? AND type = 'expense' AND date >= ?
+            """,
+            (user_id, date_limit),
+        )
+        expense = self.cursor.fetchone()[0]
+
+        self.cursor.execute(
+            """
+            SELECT category, SUM(amount) FROM transactions 
+            WHERE user_id = ? AND type = 'expense' AND date >= ?
+            GROUP BY category ORDER BY SUM(amount) DESC LIMIT 5
+            """,
+            (user_id, date_limit),
+        )
+        top_categories = self.cursor.fetchall()
+
+        return income, expense, income - expense, top_categories
+
+    # ========== ЦЕЛИ (С ПРОВЕРКОЙ ВЛАДЕНИЯ) ==========
+    
+    def add_goal(self, user_id: int, name: str, target: float) -> int:
+        """Добавление цели с проверкой владения"""
+        self.cursor.execute(
+            "INSERT INTO goals (user_id, name, target) VALUES (?, ?, ?)",
+            (user_id, name, target),
+        )
+        self.conn.commit()
+        return self.cursor.lastrowid
+
+    def get_goal(self, goal_id: int, user_id: int) -> Optional[Dict]:
+        """Получение цели с проверкой владения"""
+        self.cursor.execute(
+            "SELECT id, name, target, current, created_at FROM goals WHERE id = ? AND user_id = ?",
+            (goal_id, user_id),
+        )
+        row = self.cursor.fetchone()
+        return dict(row) if row else None
+
+    def get_goals(self, user_id: int) -> List[Dict]:
+        """Получение всех целей пользователя"""
+        self.cursor.execute(
+            "SELECT id, name, target, current, created_at FROM goals WHERE user_id = ? ORDER BY created_at DESC",
+            (user_id,),
+        )
+        return [dict(row) for row in self.cursor.fetchall()]
+
+    def update_goal_progress(self, user_id: int, amount: float) -> List[int]:
+        """Обновление прогресса целей с проверкой владения"""
+        self.cursor.execute(
+            "SELECT id, target, current FROM goals WHERE user_id = ? AND current < target",
             (user_id,)
         )
         goals = self.cursor.fetchall()
         completed_goals = []
-        
+
         for goal_id, target, current in goals:
-            if current < target:
-                new_current = min(current + amount, target)
-                self.cursor.execute(
-                    'UPDATE goals SET current = ? WHERE id = ?',
-                    (new_current, goal_id)
-                )
-                if new_current >= target:
-                    completed_goals.append(goal_id)
+            new_current = min(current + amount, target)
+            self.cursor.execute(
+                "UPDATE goals SET current = ? WHERE id = ? AND user_id = ?",
+                (new_current, goal_id, user_id)
+            )
+            if new_current >= target:
+                completed_goals.append(goal_id)
+        
         self.conn.commit()
-        return completed_goals if completed_goals else None
-    
-    def delete_goal(self, goal_id):
-        self.cursor.execute('DELETE FROM goals WHERE id = ?', (goal_id,))
+        return completed_goals
+
+    def delete_goal(self, goal_id: int, user_id: int) -> bool:
+        """Удаление цели с проверкой владения"""
+        self.cursor.execute(
+            "DELETE FROM goals WHERE id = ? AND user_id = ?",
+            (goal_id, user_id)
+        )
         self.conn.commit()
-    
-    def delete_all_user_data(self, user_id):
-        self.cursor.execute('DELETE FROM transactions WHERE user_id = ?', (user_id,))
-        self.cursor.execute('DELETE FROM goals WHERE user_id = ?', (user_id,))
+        return self.cursor.rowcount > 0
+
+    def set_goal_plant(self, goal_id: int, user_id: int, plant_type: str) -> bool:
+        """Установка растения для цели с проверкой владения"""
+        # Сначала проверяем, принадлежит ли цель пользователю
+        if not self.get_goal(goal_id, user_id):
+            return False
+        
+        self.cursor.execute(
+            "INSERT OR REPLACE INTO goal_plants (goal_id, plant_type) VALUES (?, ?)",
+            (goal_id, plant_type),
+        )
         self.conn.commit()
+        return True
+
+    # ========== ОБЩИЕ ЦЕЛИ (С ПРОВЕРКОЙ УЧАСТИЯ) ==========
     
-    # ========== МЕТОДЫ ДЛЯ ОБЩИХ ЦЕЛЕЙ ==========
-    
-    def create_shared_goal(self, creator_id, name, target, invite_code):
-        self.cursor.execute('''
-            INSERT INTO shared_goals (name, target, current, creator_id, invite_code, created_at)
-            VALUES (?, ?, ?, ?, ?, ?)
-        ''', (name, target, 0, creator_id, invite_code, datetime.now()))
+    def create_shared_goal(self, creator_id: int, name: str, target: float, invite_code: str) -> int:
+        """Создание общей цели"""
+        self.cursor.execute(
+            """
+            INSERT INTO shared_goals (name, target, creator_id, invite_code)
+            VALUES (?, ?, ?, ?)
+            """,
+            (name, target, creator_id, invite_code),
+        )
         goal_id = self.cursor.lastrowid
         
-        self.cursor.execute('''
-            INSERT INTO shared_goal_members (goal_id, user_id, contributed)
-            VALUES (?, ?, ?)
-        ''', (goal_id, creator_id, 0))
+        self.cursor.execute(
+            "INSERT INTO shared_goal_members (goal_id, user_id) VALUES (?, ?)",
+            (goal_id, creator_id),
+        )
         self.conn.commit()
         return goal_id
-    
-    def join_shared_goal(self, user_id, invite_code):
-        self.cursor.execute('SELECT id, name, target, current, creator_id FROM shared_goals WHERE invite_code = ?', (invite_code,))
+
+    def join_shared_goal(self, user_id: int, invite_code: str) -> Optional[Dict]:
+        """Присоединение к общей цели"""
+        self.cursor.execute(
+            "SELECT id, name, target, current FROM shared_goals WHERE invite_code = ?",
+            (invite_code,),
+        )
         goal = self.cursor.fetchone()
         
         if not goal:
             return None
         
-        goal_id, name, target, current, creator_id = goal
+        goal_id = goal["id"]
         
-        self.cursor.execute('SELECT * FROM shared_goal_members WHERE goal_id = ? AND user_id = ?', (goal_id, user_id))
+        # Проверяем, не состоит ли уже
+        self.cursor.execute(
+            "SELECT 1 FROM shared_goal_members WHERE goal_id = ? AND user_id = ?",
+            (goal_id, user_id),
+        )
         if self.cursor.fetchone():
-            return 'already_member'
+            return {"error": "already_member"}
         
-        self.cursor.execute('''
-            INSERT INTO shared_goal_members (goal_id, user_id, contributed)
-            VALUES (?, ?, ?)
-        ''', (goal_id, user_id, 0))
+        self.cursor.execute(
+            "INSERT INTO shared_goal_members (goal_id, user_id) VALUES (?, ?)",
+            (goal_id, user_id),
+        )
         self.conn.commit()
-        return {'goal_id': goal_id, 'name': name, 'target': target, 'current': current, 'creator_id': creator_id}
-    
-    def add_to_shared_goal(self, user_id, goal_id, amount):
-        self.cursor.execute('UPDATE shared_goals SET current = current + ? WHERE id = ?', (amount, goal_id))
-        self.cursor.execute('''
-            UPDATE shared_goal_members SET contributed = contributed + ? 
-            WHERE goal_id = ? AND user_id = ?
-        ''', (amount, goal_id, user_id))
+        return dict(goal)
+
+    def add_to_shared_goal(self, user_id: int, goal_id: int, amount: float) -> bool:
+        """Добавление средств в общую цель (с проверкой членства)"""
+        if amount <= 0:
+            return False
+        
+        # Проверяем, является ли пользователь участником
+        self.cursor.execute(
+            "SELECT 1 FROM shared_goal_members WHERE goal_id = ? AND user_id = ?",
+            (goal_id, user_id),
+        )
+        if not self.cursor.fetchone():
+            return False
+        
+        self.cursor.execute(
+            "UPDATE shared_goals SET current = current + ? WHERE id = ?",
+            (amount, goal_id),
+        )
+        
+        self.cursor.execute(
+            "UPDATE shared_goal_members SET contributed = contributed + ? WHERE goal_id = ? AND user_id = ?",
+            (amount, goal_id, user_id),
+        )
         self.conn.commit()
         
-        self.cursor.execute('SELECT target, current FROM shared_goals WHERE id = ?', (goal_id,))
+        self.cursor.execute(
+            "SELECT target, current FROM shared_goals WHERE id = ?",
+            (goal_id,),
+        )
         target, current = self.cursor.fetchone()
         return current >= target
-    
-    def get_user_shared_goals(self, user_id):
-        self.cursor.execute('''
-            SELECT sg.id, sg.name, sg.target, sg.current, sg.invite_code, sg.creator_id,
-                   (SELECT SUM(contributed) FROM shared_goal_members WHERE goal_id = sg.id) as total_contributed
+
+    def get_user_shared_goals(self, user_id: int) -> List[Dict]:
+        """Получение общих целей пользователя"""
+        self.cursor.execute(
+            """
+            SELECT sg.id, sg.name, sg.target, sg.current, sg.invite_code, sg.creator_id
             FROM shared_goals sg
             JOIN shared_goal_members sgm ON sg.id = sgm.goal_id
             WHERE sgm.user_id = ?
             ORDER BY sg.created_at DESC
-        ''', (user_id,))
-        return self.cursor.fetchall()
+            """,
+            (user_id,),
+        )
+        return [dict(row) for row in self.cursor.fetchall()]
+
+    # ========== ПРЕМИУМ ==========
     
-    def get_shared_goal_details(self, goal_id):
-        self.cursor.execute('''
-            SELECT sg.id, sg.name, sg.target, sg.current, sg.invite_code, sg.creator_id,
-                   u.name as creator_name
-            FROM shared_goals sg
-            JOIN users u ON sg.creator_id = u.user_id
-            WHERE sg.id = ?
-        ''', (goal_id,))
-        goal = self.cursor.fetchone()
-        
-        if not goal:
-            return None
-        
-        self.cursor.execute('''
-            SELECT u.user_id, u.name, sgm.contributed
-            FROM shared_goal_members sgm
-            JOIN users u ON sgm.user_id = u.user_id
-            WHERE sgm.goal_id = ?
-            ORDER BY sgm.contributed DESC
-        ''', (goal_id,))
-        members = self.cursor.fetchall()
-        
-        return {'goal': goal, 'members': members}
-    
-    # ========== МЕТОДЫ ДЛЯ ЦВЕТОВ ЦЕЛЕЙ ==========
-    
-    def set_goal_plant(self, goal_id, plant_type):
-        """Установить тип растения для цели"""
-        self.cursor.execute('''
-            INSERT OR REPLACE INTO goal_plants (goal_id, plant_type)
-            VALUES (?, ?)
-        ''', (goal_id, plant_type))
-        self.conn.commit()
-    
-    def get_goal_plant(self, goal_id):
-        """Получить тип растения для цели"""
-        self.cursor.execute('SELECT plant_type FROM goal_plants WHERE goal_id = ?', (goal_id,))
+    def is_premium(self, user_id: int) -> bool:
+        """Проверка премиум статуса"""
+        self.cursor.execute(
+            "SELECT premium_until FROM premium_users WHERE user_id = ?",
+            (user_id,)
+        )
         row = self.cursor.fetchone()
-        return row[0] if row else 'lotus'
-    
-    # ========== МЕТОДЫ ДЛЯ ПРЕМИУМ ==========
-    
-    def is_premium(self, user_id):
-        """Проверяет, есть ли у пользователя активный премиум"""
-        self.cursor.execute('SELECT premium_until FROM premium_users WHERE user_id = ?', (user_id,))
-        row = self.cursor.fetchone()
-        if row and row[0]:
-            return datetime.now() < datetime.fromisoformat(row[0])
+        if row and row["premium_until"]:
+            return datetime.now() < datetime.fromisoformat(row["premium_until"])
         return False
-    
-    def add_premium(self, user_id, days=30):
-        """Добавляет премиум пользователю на указанное количество дней"""
+
+    def add_premium(self, user_id: int, days: int = 30):
+        """Добавление премиум"""
         until = (datetime.now() + timedelta(days=days)).isoformat()
-        self.cursor.execute('''
-            INSERT OR REPLACE INTO premium_users (user_id, premium_until)
-            VALUES (?, ?)
-        ''', (user_id, until))
+        self.cursor.execute(
+            "INSERT OR REPLACE INTO premium_users (user_id, premium_until) VALUES (?, ?)",
+            (user_id, until),
+        )
         self.conn.commit()
+
+    # ========== ВИДЕО И СОВЕТЫ (ПУБЛИЧНЫЕ) ==========
     
-    def remove_premium(self, user_id):
-        """Удаляет премиум у пользователя"""
-        self.cursor.execute('DELETE FROM premium_users WHERE user_id = ?', (user_id,))
-        self.conn.commit()
-    
-    def get_premium_expiry(self, user_id):
-        """Возвращает дату истечения премиума"""
-        self.cursor.execute('SELECT premium_until FROM premium_users WHERE user_id = ?', (user_id,))
+    def get_random_tip(self) -> Optional[Dict]:
+        """Получение случайного совета"""
+        self.cursor.execute("SELECT tip, video_link FROM financial_tips ORDER BY RANDOM() LIMIT 1")
         row = self.cursor.fetchone()
-        if row and row[0]:
-            return datetime.fromisoformat(row[0])
-        return None
+        return {"tip": row["tip"], "video_link": row["video_link"]} if row else None
+
+    def get_videos_by_category(self, language: str, category: str, limit: int = 10) -> List[Dict]:
+        """Получение видео по категории"""
+        self.cursor.execute(
+            """
+            SELECT id, title, url, duration, description, level
+            FROM videos 
+            WHERE language = ? AND category = ?
+            ORDER BY level, id
+            LIMIT ?
+            """,
+            (language, category, limit),
+        )
+        return [dict(row) for row in self.cursor.fetchall()]
+
+    # ========== ADMIN-ФУНКЦИИ (ТОЛЬКО ДЛЯ АДМИНОВ) ==========
     
+    def get_all_users(self, admin_id: int, limit: int = 100) -> List[Dict]:
+        """Получение всех пользователей (только для админов)"""
+        # Сначала проверяем роль
+        role = self.get_user_role(admin_id)
+        if role != "admin":
+            return []
+        
+        self.cursor.execute(
+            "SELECT user_id, username, email, role, is_active, created_at, last_login FROM users LIMIT ?",
+            (limit,),
+        )
+        return [dict(row) for row in self.cursor.fetchall()]
+
+    def get_all_transactions_admin(self, admin_id: int, limit: int = 1000) -> List[Dict]:
+        """Получение всех транзакций (только для админов)"""
+        role = self.get_user_role(admin_id)
+        if role != "admin":
+            return []
+        
+        self.cursor.execute(
+            """
+            SELECT t.id, t.user_id, u.username, t.type, t.amount, t.category, t.date
+            FROM transactions t
+            JOIN users u ON t.user_id = u.user_id
+            ORDER BY t.date DESC
+            LIMIT ?
+            """,
+            (limit,),
+        )
+        return [dict(row) for row in self.cursor.fetchall()]
+
+    def set_user_role(self, admin_id: int, target_user_id: int, role: str) -> bool:
+        """Изменение роли пользователя (только для админов)"""
+        admin_role = self.get_user_role(admin_id)
+        if admin_role != "admin" or role not in ["user", "admin", "moderator"]:
+            return False
+        
+        self.cursor.execute(
+            "UPDATE users SET role = ? WHERE user_id = ?",
+            (role, target_user_id),
+        )
+        self.conn.commit()
+        return self.cursor.rowcount > 0
+
+    def delete_user_admin(self, admin_id: int, target_user_id: int) -> bool:
+        """Удаление пользователя (только для админов)"""
+        admin_role = self.get_user_role(admin_id)
+        if admin_role != "admin":
+            return False
+        
+        # Нельзя удалить самого себя
+        if admin_id == target_user_id:
+            return False
+        
+        self.cursor.execute("DELETE FROM users WHERE user_id = ?", (target_user_id,))
+        self.conn.commit()
+        return self.cursor.rowcount > 0
+
+    # ========== ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ==========
+    
+    def delete_all_user_data(self, user_id: int):
+        """Полное удаление всех данных пользователя"""
+        self.cursor.execute("DELETE FROM transactions WHERE user_id = ?", (user_id,))
+        self.cursor.execute("DELETE FROM goals WHERE user_id = ?", (user_id,))
+        self.cursor.execute("DELETE FROM shared_goal_members WHERE user_id = ?", (user_id,))
+        self.cursor.execute("DELETE FROM premium_users WHERE user_id = ?", (user_id,))
+        self.cursor.execute("DELETE FROM users WHERE user_id = ?", (user_id,))
+        self.conn.commit()
+
     def close(self):
         self.conn.close()

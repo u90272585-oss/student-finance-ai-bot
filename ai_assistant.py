@@ -1,5 +1,6 @@
-import os
 import asyncio
+import os
+
 from cerebras.cloud.sdk import Cerebras
 from dotenv import load_dotenv
 
@@ -12,17 +13,13 @@ if not CEREBRAS_API_KEY:
 
 client = Cerebras(api_key=CEREBRAS_API_KEY)
 
+
 async def get_ai_response(user_message: str) -> str:
     try:
         # Запускаем синхронный вызов в отдельном потоке
         response = await asyncio.to_thread(
             client.chat.completions.create,
-            messages=[
-                {
-                    "role": "user",
-                    "content": user_message
-                }
-            ],
+            messages=[{"role": "user", "content": user_message}],
             model="llama3.1-8b",
             max_tokens=500,
         )

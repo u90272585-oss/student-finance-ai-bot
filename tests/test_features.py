@@ -1,18 +1,17 @@
-import unittest
-import sqlite3
+from database import Database
 import os
+import sqlite3
 import sys
+import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from database import Database
 
 
 class TestFeatures(unittest.TestCase):
     """Feature tests — testing complete user scenarios"""
 
     def setUp(self):
-        self.test_db_path = 'test_feature.db'
+        self.test_db_path = "test_feature.db"
         self.db = Database.__new__(Database)
         self.db.conn = sqlite3.connect(self.test_db_path)
         self.db.cursor = self.db.conn.cursor()
@@ -70,7 +69,7 @@ class TestFeatures(unittest.TestCase):
 
         # Step 3: Add money to goal
         self.db.cursor.execute(
-            'UPDATE goals SET current = ? WHERE id = ?', (200000, goal_id)
+            "UPDATE goals SET current = ? WHERE id = ?", (200000, goal_id)
         )
         self.db.conn.commit()
         print("  ✅ Step 3: Money added to goal")
@@ -126,7 +125,8 @@ class TestFeatures(unittest.TestCase):
         print("  ✅ Step 1: Two users registered")
 
         # Step 2: Create shared goal
-        goal_id = self.db.create_shared_goal(444, "Trip to Bali", 300000, "BALI2026")
+        goal_id = self.db.create_shared_goal(
+            444, "Trip to Bali", 300000, "BALI2026")
         print("  ✅ Step 2: Shared goal created with invite code BALI2026")
 
         # Step 3: Second user joins
@@ -141,7 +141,7 @@ class TestFeatures(unittest.TestCase):
 
         # Step 5: Check total
         details = self.db.get_shared_goal_details(goal_id)
-        total = details['goal'][3]
+        total = details["goal"][3]
         self.assertEqual(total, 250000)
         print(f"  ✅ Step 5: Total contributions correct — {total} KZT")
         print("  🎉 Scenario 4 PASSED!")
@@ -158,10 +158,13 @@ class TestFeatures(unittest.TestCase):
         print("  ✅ Step 1: User registered")
 
         # Step 2: Earn coins over time (simulate multiple days)
-        self.db.cursor.execute('''
+        self.db.cursor.execute(
+            """
             INSERT INTO coins (user_id, total_coins, last_game_date)
             VALUES (?, ?, ?)
-        ''', (666, 500, "2026-01-01"))
+        """,
+            (666, 500, "2026-01-01"),
+        )
         self.db.conn.commit()
         total_coins, _ = self.db.get_coins(666)
         self.assertEqual(total_coins, 500)
@@ -179,7 +182,7 @@ class TestFeatures(unittest.TestCase):
         print("  🎉 Scenario 5 PASSED!")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     print("=" * 50)
     print("🧪 Running Feature Tests — Finance Bot")
     print("=" * 50)

@@ -2,11 +2,11 @@ import sqlite3
 from datetime import datetime
 
 # Подключаемся к базе данных
-conn = sqlite3.connect('finance.db')
+conn = sqlite3.connect("finance.db")
 cursor = conn.cursor()
 
 # Получаем пользователей с информацией о премиуме
-cursor.execute('''
+cursor.execute("""
     SELECT 
         u.user_id, 
         u.name, 
@@ -17,7 +17,7 @@ cursor.execute('''
     FROM users u
     LEFT JOIN premium_users p ON u.user_id = p.user_id
     ORDER BY u.created_at DESC
-''')
+""")
 users = cursor.fetchall()
 
 # Подсчитываем премиум
@@ -39,7 +39,7 @@ for user in users:
 conn.close()
 
 # Создаём HTML-отчёт
-html = f'''<!DOCTYPE html>
+html = f"""<!DOCTYPE html>
 <html>
 <head>
     <meta charset="UTF-8">
@@ -77,11 +77,11 @@ html = f'''<!DOCTYPE html>
             <th>Дата регистрации</th>
             <th>Премиум</th>
             <th>Премиум до</th>
-        </tr>'''
+        </tr>"""
 
 for user in users:
     user_id, name, language, currency, reg_date, premium_until = user
-    
+
     # Проверяем активный премиум
     is_premium = False
     premium_until_str = "—"
@@ -93,14 +93,14 @@ for user in users:
                 premium_until_date = premium_until
             if premium_until_date > datetime.now():
                 is_premium = True
-                premium_until_str = premium_until_date.strftime('%d.%m.%Y')
+                premium_until_str = premium_until_date.strftime("%d.%m.%Y")
         except:
             premium_until_str = "—"
-    
+
     premium_status = "✅ Да" if is_premium else "❌ Нет"
     premium_class = "premium-yes" if is_premium else "premium-no"
-    
-    html += f'''
+
+    html += f"""
     <tr>
         <td>{user_id}</td>
         <td>{name or "—"}</td>
@@ -109,15 +109,15 @@ for user in users:
         <td>{reg_date}</td>
         <td class="{premium_class}">{premium_status}</td>
         <td>{premium_until_str}</td>
-    </tr>'''
+    </tr>"""
 
-html += '''
+html += """
     </table>
 </body>
-</html>'''
+</html>"""
 
 # Сохраняем файл
-with open('users_report.html', 'w', encoding='utf-8') as f:
+with open("users_report.html", "w", encoding="utf-8") as f:
     f.write(html)
 
 print(f"✅ Отчёт создан! Пользователей: {len(users)}")

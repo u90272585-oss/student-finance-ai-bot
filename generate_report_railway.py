@@ -1,14 +1,15 @@
-import psycopg2
 from datetime import datetime
+
+import psycopg2
 
 # Твоя публичная строка подключения
 DATABASE_URL = "postgresql://postgres:imegfwFZfoDoobfAPBYHXPBELylmdUlj@switchyard.proxy.rlwy.net:10435/railway"
 
 try:
-    conn = psycopg2.connect(DATABASE_URL, sslmode='require')
+    conn = psycopg2.connect(DATABASE_URL, sslmode="require")
     cur = conn.cursor()
-    
-    cur.execute('''
+
+    cur.execute("""
         SELECT 
             u.user_id, 
             u.name, 
@@ -19,10 +20,10 @@ try:
         FROM users u
         LEFT JOIN premium_users p ON u.user_id = p.user_id
         ORDER BY u.created_at DESC
-    ''')
+    """)
     users = cur.fetchall()
     conn.close()
-    
+
     # Подсчитываем премиум
     premium_count = 0
     for user in users:
@@ -33,8 +34,8 @@ try:
                     premium_count += 1
             except:
                 pass
-    
-    html = f'''<!DOCTYPE html>
+
+    html = f"""<!DOCTYPE html>
 <html>
 <head>
     <meta charset="UTF-8">
@@ -103,11 +104,11 @@ try:
             <th>Дата регистрации</th>
             <th>Премиум</th>
             <th>Премиум до</th>
-        </tr>'''
-    
+        </tr>"""
+
     for user in users:
         user_id, name, language, currency, reg_date, premium_until = user
-        
+
         # Проверяем активный премиум
         is_premium = False
         premium_until_str = "—"
@@ -115,14 +116,14 @@ try:
             try:
                 if premium_until > datetime.now():
                     is_premium = True
-                    premium_until_str = premium_until.strftime('%d.%m.%Y')
+                    premium_until_str = premium_until.strftime("%d.%m.%Y")
             except:
                 premium_until_str = "—"
-        
+
         premium_status = "✅ Да" if is_premium else "❌ Нет"
         premium_class = "premium-yes" if is_premium else "premium-no"
-        
-        html += f'''
+
+        html += f"""
         <tr>
             <td>{user_id}</td>
             <td>{name or "—"}</td>
@@ -131,18 +132,18 @@ try:
             <td>{reg_date}</td>
             <td class="{premium_class}">{premium_status}</td>
             <td>{premium_until_str}</td>
-        </tr>'''
-    
-    html += '''
+        </tr>"""
+
+    html += """
     </table>
 </body>
-</html>'''
-    
-    with open('railway_users.html', 'w', encoding='utf-8') as f:
+</html>"""
+
+    with open("railway_users.html", "w", encoding="utf-8") as f:
         f.write(html)
-    
+
     print(f"✅ Готово! Найдено пользователей: {len(users)}")
     print("📁 Открой файл: railway_users.html")
-    
+
 except Exception as e:
     print(f"❌ Ошибка: {e}")
