@@ -1303,6 +1303,7 @@ async def handle_unknown(message: types.Message, state: FSMContext):
 # ========== ГЛАВНАЯ АСИНХРОННАЯ ФУНКЦИЯ ЗАПУСКА ==========
 async def main():
     await db.connect()
+    await asyncio.sleep(3)  
     print("=" * 50)
     print("🚀 FINANCE BOT STARTED!")
     print("=" * 50)
@@ -1340,7 +1341,8 @@ async def main():
 
     # Запускаем long polling бота
     try:
-        await dp.start_polling(bot)
+        await bot.delete_webhook(drop_pending_updates=True)
+        await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
     finally:
         # Корректно закрываем сервер и бота при остановке
         await runner.cleanup()
