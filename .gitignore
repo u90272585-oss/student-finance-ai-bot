@@ -3,3 +3,6 @@ __pycache__/
 *.pyc
 finance.db
 venv/
+venv/
+__pycache__/
+.pytest_cache/
