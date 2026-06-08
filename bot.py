@@ -107,7 +107,7 @@ async def cmd_start(message: types.Message, state: FSMContext):
     user_id = message.from_user.id
     user = await db.get_user(user_id)
     if user:
-        lang = user[3]
+        lang = user["language"]
         await message.answer(
             get_text(lang, 'main_menu'),
             reply_markup=get_main_keyboard(lang),
@@ -1295,7 +1295,7 @@ async def discount_command(message: types.Message, state: FSMContext):
 async def handle_unknown(message: types.Message, state: FSMContext):
     user = await db.get_user(message.from_user.id)
     if user:
-        lang = user[3]
+        lang = user["language"]
         await message.answer(get_text(lang, 'error'), reply_markup=get_main_keyboard(lang))
     else:
         await cmd_start(message, state)
