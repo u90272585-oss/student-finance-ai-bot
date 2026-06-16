@@ -8,7 +8,25 @@ from security_logger import log_security_event
 
 # Определяем, где мы запущены
 USE_POSTGRES = os.getenv("DATABASE_URL") is not None
+VALID_TRANSITIONS = {
+    "created": ["pending"],
 
+    "pending": [
+        "paid",
+        "failed",
+        "cancelled"
+    ],
+
+    "paid": [
+        "refunded"
+    ],
+
+    "failed": [],
+
+    "cancelled": [],
+
+    "refunded": []
+}
 class Database:
     def __init__(self):
         self.use_postgres = USE_POSTGRES
@@ -78,6 +96,20 @@ class Database:
                     premium_until TIMESTAMP
                 )
             ''')
+            await conn.execute('''
+    CREATE TABLE IF NOT EXISTS orders (
+        id SERIAL PRIMARY KEY,
+        user_id BIGINT NOT NULL,
+        amount INTEGER NOT NULL,
+
+        status TEXT NOT NULL DEFAULT 'created',
+
+        gateway_order_id TEXT,
+        payment_url TEXT,
+
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+''')
             await conn.execute('''
                 CREATE TABLE IF NOT EXISTS coins (
                     user_id BIGINT PRIMARY KEY,
@@ -184,6 +216,21 @@ class Database:
                 premium_until TIMESTAMP
             )
         ''')
+        self.cursor.execute('''
+    CREATE TABLE IF NOT EXISTS orders (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+        user_id INTEGER NOT NULL,
+        amount INTEGER NOT NULL,
+
+        status TEXT NOT NULL DEFAULT 'created',
+
+        gateway_order_id TEXT,
+        payment_url TEXT,
+
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+''')
         self.cursor.execute('''
             CREATE TABLE IF NOT EXISTS coins (
                 user_id INTEGER PRIMARY KEY,
@@ -598,7 +645,220 @@ class Database:
                 VALUES (?, ?)
             ''', (user_id, until))
             self.conn.commit()
+    async def create_order(
+    self,
+    user_id,
+    amount,
+    status="created",
+    gateway_order_id=None,
+    payment_url=None
+):
+    if self.use_postgres:
+        async with self.pool.acquire() as conn:
+            row = await conn.fetchrow('''
+                INSERT INTO orders (
+                    user_id,
+                    amount,
+                    status,
+                    gateway_order_id,
+                    payment_url
+                )
+                VALUES ($1, $2, $3, $4, $5)
+                RETURNING id
+            ''',
+            user_id,
+            amount,
+            status,
+            gateway_order_id,
+            payment_url)
 
+            return row["id"]
+
+    else:
+        self.cursor.execute('''
+            INSERT INTO orders (
+                user_id,
+                amount,
+                status,
+                gateway_order_id,
+                payment_url
+            )
+            VALUES (?, ?, ?, ?, ?)
+        ''',
+        (
+            user_id,
+            amount,
+            status,
+            gateway_order_id,
+            payment_url
+        ))
+
+        self.conn.commit()
+
+        return self.cursor.lastrowid
+
+async def get_order(self, order_id):
+    if self.use_postgres:
+        async with self.pool.acquire() as conn:
+            return await conn.fetchrow(
+                '''
+                SELECT *
+                FROM orders
+                WHERE id = $1
+                ''',
+                order_id
+            )
+
+    else:
+        self.cursor.execute(
+            '''
+            SELECT *
+            FROM orders
+            WHERE id = ?
+            ''',
+            (order_id,)
+        )
+
+        return self.cursor.fetchone()
+    
+    async def update_order_status(
+    self,
+    order_id,
+    new_status
+):
+    if self.use_postgres:
+        async with self.pool.acquire() as conn:
+            await conn.execute(
+                '''
+                UPDATE orders
+                SET status = $1
+                WHERE id = $2
+                ''',
+                new_status,
+                order_id
+            )
+
+    else:
+        self.cursor.execute(
+            '''
+            UPDATE orders
+            SET status = ?
+            WHERE id = ?
+            ''',
+            (
+                new_status,
+                order_id
+            )
+        )
+
+        self.conn.commit()
+async def find_recent_pending_order(
+    self,
+    user_id,
+    amount
+):
+    if self.use_postgres:
+        async with self.pool.acquire() as conn:
+            return await conn.fetchrow(
+                '''
+                SELECT *
+                FROM orders
+                WHERE user_id = $1
+                AND amount = $2
+                AND status = 'pending'
+                AND created_at >= NOW() - INTERVAL '5 minutes'
+                ORDER BY created_at DESC
+                LIMIT 1
+                ''',
+                user_id,
+                amount
+            )
+
+    else:
+        self.cursor.execute(
+            '''
+            SELECT *
+            FROM orders
+            WHERE user_id = ?
+            AND amount = ?
+            AND status = 'pending'
+            AND datetime(created_at) >= datetime('now', '-5 minutes')
+            ORDER BY created_at DESC
+            LIMIT 1
+            ''',
+            (
+                user_id,
+                amount
+            )
+        )
+
+        return self.cursor.fetchone()
+async def activate_premium_after_payment(
+    self,
+    order_id
+):
+    order = await self.get_order(order_id)
+
+    if not order:
+        raise ValueError(
+            f"Order {order_id} not found"
+        )
+
+    status = (
+        order["status"]
+        if self.use_postgres
+        else order[3]
+    )
+
+    if status != "paid":
+        raise ValueError(
+            f"Order {order_id} is not paid"
+        )
+
+    user_id = (
+        order["user_id"]
+        if self.use_postgres
+        else order[1]
+    )
+
+    await self.add_premium(
+        user_id,
+        days=30
+    )
+
+    return True
+
+    
+async def transition_order(
+    self,
+    order_id,
+    new_status
+):
+    order = await self.get_order(order_id)
+
+    if not order:
+        raise ValueError(
+            f"Order {order_id} not found"
+        )
+
+    current_status = order["status"] if self.use_postgres else order[3]
+
+    allowed = VALID_TRANSITIONS.get(
+        current_status,
+        []
+    )
+
+    if new_status not in allowed:
+        raise ValueError(
+            f"Transition {current_status} -> {new_status} not allowed"
+        )
+
+    await self.update_order_status(
+        order_id,
+        new_status
+    )
+
+    return True
     async def remove_premium(self, user_id):
         if self.use_postgres:
             async with self.pool.acquire() as conn:
