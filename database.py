@@ -659,7 +659,7 @@ class Database:
                 async with self.pool.acquire() as conn:
                     await conn.execute('UPDATE coins SET total_coins = total_coins - $1 WHERE user_id = $2', coins_needed, user_id)
             else:
-                self.cursor.execute("UPDATE coins SET total_coins = total_coins - ? WHERE user_id = ?", (coins_needed, user_id))
+                self.cursor.execute('UPDATE coins SET total_coins = total_coins - ? WHERE user_id = ?', (coins_needed, user_id))
                 self.conn.commit()
             return True
         return False
@@ -864,3 +864,29 @@ class Database:
             await self.pool.close()
         elif self.conn:
             self.conn.close()
+
+    # ========== УДАЛЕНИЕ ВСЕХ ДАННЫХ ПОЛЬЗОВАТЕЛЯ ==========
+
+    async def delete_all_user_data(self, user_id):
+        """Удаляет все данные пользователя (транзакции, цели, премиум, монеты)"""
+        if self.use_postgres:
+            async with self.pool.acquire() as conn:
+                await conn.execute('DELETE FROM transactions WHERE user_id = $1', user_id)
+                await conn.execute('DELETE FROM goals WHERE user_id = $1', user_id)
+                await conn.execute('DELETE FROM premium_users WHERE user_id = $1', user_id)
+                await conn.execute('DELETE FROM coins WHERE user_id = $1', user_id)
+                await conn.execute('DELETE FROM shared_goal_members WHERE user_id = $1', user_id)
+        else:
+            self.cursor.execute('DELETE FROM transactions WHERE user_id = ?', (user_id,))
+            self.cursor.execute('DELETE FROM goals WHERE user_id = ?', (user_id,))
+            self.cursor.execute('DELETE FROM premium_users WHERE user_id = ?', (user_id,))
+            self.cursor.execute('DELETE FROM coins WHERE user_id = ?', (user_id,))
+            self.cursor.execute('DELETE FROM shared_goal_members WHERE user_id = ?', (user_id,))
+            self.conn.commit()
+
+        # Очищаем кэш
+        clear_user_cache(user_id)
+        delete_cached(f"transactions:{user_id}")
+        delete_cached(f"goals:{user_id}")
+
+        log_security_event("USER_DATA_DELETED", user_id, "telegram", {"action": "delete_all_data"})
