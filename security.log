@@ -89,3 +89,7 @@
 2026-06-04 09:13:33,550 - security - INFO - {"event_type": "USER_CREATED", "user_id": 5002, "ip": "telegram", "timestamp": "2026-06-04T09:13:33.550964", "details": {"name": "No Goals User"}}
 2026-06-04 09:13:33,554 - security - INFO - {"event_type": "USER_CREATED", "user_id": 5003, "ip": "telegram", "timestamp": "2026-06-04T09:13:33.554276", "details": {"name": "Multi Goal User"}}
 2026-06-04 09:57:02,671 - security - INFO - {"event_type": "TEST_EVENT", "user_id": 999999, "ip": "manual", "timestamp": "2026-06-04T09:57:02.671815", "details": {"test": "data"}}
+2026-06-18 09:32:56,640 - security - INFO - {"event_type": "RATE_LIMIT_HIT", "user_id": 1362117255, "ip": "telegram", "timestamp": "2026-06-18T09:32:56.640179", "details": {"limit": 1.0}}
+2026-06-18 09:33:04,159 - security - INFO - {"event_type": "RATE_LIMIT_HIT", "user_id": 1362117255, "ip": "telegram", "timestamp": "2026-06-18T09:33:04.159132", "details": {"limit": 1.0}}
+2026-06-18 09:33:04,907 - security - INFO - {"event_type": "RATE_LIMIT_HIT", "user_id": 1362117255, "ip": "telegram", "timestamp": "2026-06-18T09:33:04.907424", "details": {"limit": 1.0}}
+2026-06-18 09:33:05,406 - security - INFO - {"event_type": "RATE_LIMIT_HIT", "user_id": 1362117255, "ip": "telegram", "timestamp": "2026-06-18T09:33:05.406134", "details": {"limit": 1.0}}

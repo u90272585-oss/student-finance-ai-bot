@@ -9,6 +9,11 @@ import os
 from dotenv import load_dotenv
 from security_logger import log_admin_access, log_security_event
 
+# ─── ИМПОРТ ДЛЯ FASTAPI И PAYPAL ────────────────────────────────────
+from fastapi import FastAPI, HTTPException, Request, status
+from pydantic import BaseModel
+import httpx
+
 # ─── ИМПОРТ ДЛЯ АСИНХРОННОГО ВЕБ-СЕРВЕРА (ОБМАН RENDER) ──────────────
 from aiohttp import web
 
@@ -41,6 +46,13 @@ logger = logging.getLogger(__name__)
 bot = Bot(token=TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
 db = Database()
+
+# 1. Создаем главный сервер FastAPI (он заменит старый aiohttp для Render)
+app = FastAPI()  
+
+# 2. Подключаем твой отдельный файл payment.py
+from payment import router as payment_router
+app.include_router(payment_router)
 
 # Rate limiting — защита от спама
 from collections import defaultdict
@@ -1300,14 +1312,20 @@ async def handle_unknown(message: types.Message, state: FSMContext):
     else:
         await cmd_start(message, state)
 
-# ========== ГЛАВНАЯ АСИНХРОННАЯ ФУНКЦИЯ ЗАПУСКА ==========
-async def main():
-    await db.connect()
-    await asyncio.sleep(3)  
+# ─── НОВЫЙ БЛОК ЗАПУСКА (БАЗА ДАННЫХ + БОТ + FASTAPI) ───────────────────
+import uvicorn
+
+@app.on_event("startup")
+async def on_startup():
+    # 1. Подключаем базу данных (перенесли из твоей функции main)
+    #await db.connect()
+    await asyncio.sleep(1)  
+    
     print("=" * 50)
     print("🚀 FINANCE BOT STARTED!")
     print("=" * 50)
 
+    # 2. Устанавливаем меню команд для телеграма
     await bot.set_my_commands([
         types.BotCommand(command="start", description="🚀 Запустить бота"),
         types.BotCommand(command="new_goal", description="🎯 Создать новую цель"),
@@ -1325,28 +1343,26 @@ async def main():
     print("✅ Features: Shared Goals, Videos, Tips, Export, Goal Flowers 🌸, AI Assistant 🤖, Premium 💎")
     print("=" * 50)
 
-    # ─── АСИНХРОННЫЙ ЗАПУСК ВЕБ-СЕРВЕРА ДЛЯ RENDER ───────────────────
-    app = web.Application()
-    app.router.add_get('/', handle_render_ping)
-
-    port = int(os.environ.get("PORT", 10000))
-    runner = web.AppRunner(app)
-    await runner.setup()
-    site = web.TCPSite(runner, '0.0.0.0', port)
-
-    # Запускаем сайт параллельно, не блокируя остальной код
-    await site.start()
-    print(f"🌍 Асинхронный веб-сервер успешно запущен на порту {port}!")
+    # 3. Удаляем вебхуки и запускаем бота параллельно с сервером
+    await bot.delete_webhook(drop_pending_updates=True)
+    asyncio.create_task(dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types()))
+    print("🤖 Telegram Bot polling успешно запущен в фоне!")
     print("=" * 50)
 
-    # Запускаем long polling бота
-    try:
-        await bot.delete_webhook(drop_pending_updates=True)
-        await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
-    finally:
-        # Корректно закрываем сервер и бота при остановке
-        await runner.cleanup()
-        await bot.session.close()
+
+@app.on_event("shutdown")
+async def on_shutdown():
+    print("=" * 50)
+    print("🛑 Останавливаем сервер и закрываем сессию бота...")
+    await bot.session.close()
+    print("👋 Все сессии успешно закрыты.")
+    print("=" * 50)
+
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    # Ловим порт, который дает Render (по дефолту 10000, как у тебя в коде)
+    port = int(os.environ.get("PORT", 10000))
+    print(f"🌍 Запускаем FastAPI сервер на порту {port}...")
+    
+    # Запускаем сервер uvicorn, который берёт управление на себя
+    uvicorn.run(app, host="0.0.0.0", port=port)
