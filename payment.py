@@ -1,23 +1,34 @@
 import os
 import httpx
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Optional
 
-router = APIRouter(prefix="/api/orders", tags=["Payments"])
+# Создаём роутер один раз (без префикса, он добавится в bot.py)
+router = APIRouter()
 
-# Берем секреты из твоего .env
+# Берем секреты из .env
 PAYPAL_CLIENT_ID = os.getenv("PAYPAL_CLIENT_ID")
 PAYPAL_CLIENT_SECRET = os.getenv("PAYPAL_CLIENT_SECRET")
 PAYPAL_BASE_URL = "https://api-m.sandbox.paypal.com"
+
+
+# ===== МОДЕЛИ ДЛЯ ЗАПРОСОВ =====
 
 class OrderRequest(BaseModel):
     amount: Optional[str] = "2.90"
     currency: Optional[str] = "USD"
     description: Optional[str] = "CoinMind Premium"
 
+class ActivatePremiumRequest(BaseModel):
+    user_id: int
+    order_id: str
+
+
+# ===== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ =====
+
 async def get_paypal_access_token() -> str:
-    """Асинхронное получение токена от PayPal"""
+    """Получение токена от PayPal"""
     url = f"{PAYPAL_BASE_URL}/v1/oauth2/token"
     headers = {
         "Accept": "application/json",
@@ -26,7 +37,6 @@ async def get_paypal_access_token() -> str:
     data = {"grant_type": "client_credentials"}
     
     async with httpx.AsyncClient() as client:
-        # Аутентификация Basic Auth (передаем Client ID и Secret)
         response = await client.post(
             url, 
             headers=headers, 
@@ -40,19 +50,22 @@ async def get_paypal_access_token() -> str:
         
     return response.json().get("access_token")
 
-@router.post("")
+
+# ===== ЭНДПОИНТЫ =====
+
+@router.post("/api/orders")
 async def create_order(payload: OrderRequest):
+    """Создание заказа в PayPal"""
     try:
         access_token = await get_paypal_access_token()
         
-        # ХАРДКОРНЫЙ ФИКС: Если с фронта летит KZT или знак тенге ₸, 
-        # принудительно меняем на USD, иначе PayPal выплюнет ошибку!
+        # Конвертация KZT → USD
         currency = payload.currency
         amount = payload.amount
         
         if currency in ["KZT", "₸", "kzt"]:
             currency = "USD"
-            amount = "0.65" # Пересчитали твои 290 тенге в доллары по курсу
+            amount = "0.65"  # 290 тенге ≈ $0.65
             
         url = f"{PAYPAL_BASE_URL}/v2/checkout/orders"
         headers = {
@@ -70,25 +83,38 @@ async def create_order(payload: OrderRequest):
                 "description": payload.description
             }],
             "application_context": {
-                "return_url": "http://localhost:8000/landing/success.html",
-                "cancel_url": "http://localhost:8000/landing/home.html"
+                "return_url": "https://mycashbot.online/success.html",
+                "cancel_url": "https://mycashbot.online/cancel.html"
             }
         }
         
         async with httpx.AsyncClient() as client:
             response = await client.post(url, headers=headers, json=body)
             
-        # Если PayPal вернул ошибку (например, 400 или 422), мы выводим её в консоль Python
         if response.status_code != 201:
-            print(f"❌ PayPal API Error Full Details: {response.text}")
+            print(f"❌ PayPal API Error: {response.text}")
             raise HTTPException(
                 status_code=response.status_code, 
-                detail=f"PayPal refused to create order: {response.text}"
+                detail=f"PayPal error: {response.text}"
             )
             
         order_data = response.json()
         return {"id": order_data.get("id")}
         
     except Exception as e:
-        print(f"❌ Критическая ошибка бэкенда: {str(e)}")
+        print(f"❌ Критическая ошибка: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
+
+
+@router.post("/api/activate-premium")
+async def activate_premium(request_data: ActivatePremiumRequest):
+    """Активация премиум-подписки после оплаты"""
+    from database import db  # ← импорт внутри, чтобы избежать циклических зависимостей
+    
+    try:
+        await db.add_premium(request_data.user_id, days=30)
+        print(f"✅ Премиум активирован для пользователя {request_data.user_id}")
+        return {"status": "success", "message": "Premium activated"}
+    except Exception as e:
+        print(f"❌ Ошибка активации премиума: {e}")
         raise HTTPException(status_code=500, detail="Internal Server Error")
