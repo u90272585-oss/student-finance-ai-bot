@@ -8,6 +8,7 @@ from datetime import datetime
 import os
 from dotenv import load_dotenv
 from security_logger import log_admin_access, log_security_event
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 # ─── ИМПОРТ ДЛЯ FASTAPI И PAYPAL ────────────────────────────────────
 from fastapi import FastAPI, HTTPException, Request, status
@@ -1089,30 +1090,42 @@ async def show_premium_info(message: types.Message):
     if not user:
         await cmd_start(message, None)
         return
+    
     lang = user["language"]
-    is_premium = await db.is_premium(message.from_user.id)
+    user_id = message.from_user.id
+    is_premium = await db.is_premium(user_id)
+    
     if is_premium:
-        expiry = await db.get_premium_expiry(message.from_user.id)
+        expiry = await db.get_premium_expiry(user_id)
         await message.answer(
             f"💎 <b>Premium статус</b>\n\n"
-            f"✅ У вас есть active премиум!\n"
+            f"✅ У вас есть активный премиум!\n"
             f"📅 Действует до: {expiry.strftime('%d.%m.%Y')}\n\n"
             f"Спасибо! 🚀",
             parse_mode="HTML",
             reply_markup=get_main_keyboard(lang)
         )
     else:
+        # ✅ КНОПКА ДЛЯ ПЕРЕХОДА НА САЙТ
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(
+                text="💳 Купить Premium",
+                url=f"https://mycashbot.online/payment.html?user_id={user_id}"
+            )]
+        ])
+        
         await message.answer(
             "💎 <b>Premium доступ</b>\n\n"
             "Что вы получаете:\n"
             "• 🌸 Все 5 цветов для целей\n"
             "• 📚 Все 30+ видео\n"
             "• 🚀 Безлимит целей\n\n"
-            "💰 Цена: 400 ₸ / месяц\n\n"
-            "📞 Для оформления: @uuu_ze",
+            "💰 Цена: 290 ₸ / месяц\n\n"
+            "Нажмите на кнопку ниже, чтобы оплатить:",
             parse_mode="HTML",
-            reply_markup=get_main_keyboard(lang)
+            reply_markup=keyboard
         )
+
 
 @dp.message(Command("myid"))
 async def my_id(message: types.Message):
