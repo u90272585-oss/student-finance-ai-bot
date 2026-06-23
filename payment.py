@@ -109,10 +109,21 @@ async def create_order(payload: OrderRequest):
 @router.post("/api/activate-premium")
 async def activate_premium(request_data: ActivatePremiumRequest):
     """Активация премиум-подписки после оплаты"""
-    from database import db  # ← импорт внутри, чтобы избежать циклических зависимостей
+    from database import db
+    from analytics import capture_event  # 👈 ДОБАВЛЯЕМ ИМПОРТ
     
     try:
         await db.add_premium(request_data.user_id, days=30)
+        
+        # ========== 🚀 POSTHOG: ОПЛАТА УСПЕШНА ==========
+        capture_event(request_data.user_id, "payment_completed", {
+            "amount": 2.90,
+            "currency": "USD",
+            "plan": "premium",
+            "gateway": "paypal"
+        })
+        # ==============================================
+        
         print(f"✅ Премиум активирован для пользователя {request_data.user_id}")
         return {"status": "success", "message": "Premium activated"}
     except Exception as e:

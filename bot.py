@@ -9,6 +9,8 @@ import os
 from dotenv import load_dotenv
 from security_logger import log_admin_access, log_security_event
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+import analytics
+from analytics import capture_event, identify_user
 
 # ─── ИМПОРТ ДЛЯ FASTAPI И PAYPAL ────────────────────────────────────
 from fastapi import FastAPI, HTTPException, Request, status
@@ -122,6 +124,14 @@ async def cmd_start(message: types.Message, state: FSMContext):
     user = await db.get_user(user_id)
     if user:
         lang = user["language"]
+        
+        # ========== 🚀 POSTHOG: ВХОД ==========
+        capture_event(user_id, "user_logged_in", {
+            "platform": "telegram",
+            "method": "start_command"
+        })
+        # ======================================
+        
         await message.answer(
             get_text(lang, 'main_menu'),
             reply_markup=get_main_keyboard(lang),
@@ -327,6 +337,7 @@ async def setup_currency(message: types.Message, state: FSMContext):
     data = await state.get_data()
     user_id = message.from_user.id
     selected_lang = data['language']
+    
     await db.add_user(
         user_id,
         message.from_user.first_name,
@@ -334,6 +345,21 @@ async def setup_currency(message: types.Message, state: FSMContext):
         selected_lang,
         currency_code
     )
+    
+    # ========== 🚀 POSTHOG: РЕГИСТРАЦИЯ ==========
+    identify_user(user_id, {
+        "name": message.from_user.first_name,
+        "language": selected_lang,
+        "country": data['country'],
+        "currency": currency_code
+    })
+    capture_event(user_id, "user_signed_up", {
+        "plan": "free",
+        "method": "telegram",
+        "country": data['country']
+    })
+    # ==========================================
+    
     await message.answer(
         get_text(selected_lang, 'setup_complete').format(
             country=COUNTRIES[data['country']]['name'],
@@ -403,6 +429,15 @@ async def transaction_note(message: types.Message, state: FSMContext):
     data = await state.get_data()
     note = "" if message.text == "/skip" else message.text
     await db.add_transaction(message.from_user.id, data['type'], data['amount'], data['category'], note)
+    
+    # ========== 🚀 POSTHOG: ДОБАВЛЕНИЕ ТРАНЗАКЦИИ ==========
+    capture_event(message.from_user.id, "transaction_added", {
+        "type": data['type'],
+        "amount": data['amount'],
+        "category": data['category']
+    })
+    # ========================================================
+    
     if data['type'] == 'income':
         await db.update_goal_progress(message.from_user.id, data['amount'])
     await message.answer(
@@ -416,7 +451,6 @@ async def transaction_note(message: types.Message, state: FSMContext):
         reply_markup=get_main_keyboard(lang)
     )
     await state.clear()
-
 @dp.message(lambda m: m.text in [get_text('ru', 'statistics'), get_text('kz', 'statistics'), get_text('en', 'statistics'), get_text('ua', 'statistics')])
 async def show_statistics(message: types.Message):
     user = await db.get_user(message.from_user.id)
@@ -570,6 +604,15 @@ async def new_goal_amount(message: types.Message, state: FSMContext):
             return
         goal_id = await db.add_goal(message.from_user.id, data['name'], amount)
         await state.update_data(goal_id=goal_id, goal_amount=amount, goal_name=data['name'])
+        
+        # ========== 🚀 POSTHOG: СОЗДАНИЕ ЦЕЛИ ==========
+        capture_event(message.from_user.id, "goal_created", {
+            "goal_name": data['name'],
+            "goal_amount": amount,
+            "plan": "premium" if is_premium else "free"
+        })
+        # ==============================================
+        
         if is_premium:
             await message.answer(
                 "🌸 Выберите цветок для цели! (Премиум: все цветы доступны)\n\n"
@@ -713,7 +756,18 @@ async def change_language_set(message: types.Message, state: FSMContext):
         await message.answer("❌ Please select a language from the list!")
         return
     db.update_language(message.from_user.id, lang_code)
-    await message.answer(get_text(lang_code, 'language_changed').format(language=lang_name), reply_markup=get_main_keyboard(lang_code))
+    
+    # ========== 🚀 POSTHOG: СМЕНА ЯЗЫКА ==========
+    capture_event(message.from_user.id, "settings_changed", {
+        "setting": "language",
+        "new_value": lang_code
+    })
+    # ============================================
+    
+    await message.answer(
+        get_text(lang_code, 'language_changed').format(language=lang_name),
+        reply_markup=get_main_keyboard(lang_code)
+    )
     await state.clear()
 
 @dp.message(lambda m: m.text in [get_text('ru', 'change_currency'), get_text('kz', 'change_currency'), get_text('en', 'change_currency'), get_text('ua', 'change_currency')])
@@ -740,9 +794,19 @@ async def change_currency_set(message: types.Message, state: FSMContext):
         await message.answer("❌ Please select a currency from the list!")
         return
     db.update_currency(message.from_user.id, currency_code)
-    await message.answer(get_text(lang, 'currency_changed').format(currency=currency_name), reply_markup=get_main_keyboard(lang))
+    
+    # ========== 🚀 POSTHOG: СМЕНА ВАЛЮТЫ ==========
+    capture_event(message.from_user.id, "settings_changed", {
+        "setting": "currency",
+        "new_value": currency_code
+    })
+    # ==============================================
+    
+    await message.answer(
+        get_text(lang, 'currency_changed').format(currency=currency_name),
+        reply_markup=get_main_keyboard(lang)
+    )
     await state.clear()
-
 # ========== ОБЩИЕ ЦЕЛИ (SHARED GOALS) ==========
 @dp.message(lambda m: m.text in ["👥 Shared Goals", "👥 Общие цели"])
 async def shared_goals_menu(message: types.Message, state: FSMContext):
@@ -786,6 +850,12 @@ async def create_shared_goal_target(message: types.Message, state: FSMContext):
         data = await state.get_data()
         invite_code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
         goal_id = db.create_shared_goal(message.from_user.id, data['name'], target, invite_code)
+        # ========== 🚀 POSTHOG: СОЗДАНИЕ ОБЩЕЙ ЦЕЛИ ==========
+        capture_event(message.from_user.id, "shared_goal_created", {
+            "goal_name": data['name'],
+            "target": target
+        })
+        # =====================================================
         await message.answer(
             f"✅ Shared goal \"{data['name']}\" created!\n\n"
             f"Target: {target} {CURRENCIES[currency]['symbol']}\n\n"
@@ -821,6 +891,11 @@ async def join_shared_goal_execute(message: types.Message, state: FSMContext):
     elif result == 'already_member':
         await message.answer("⚠️ You are already a member of this goal!", reply_markup=get_shared_goals_keyboard())
     else:
+         # ========== 🚀 POSTHOG: ПРИСОЕДИНЕНИЕ К ОБЩЕЙ ЦЕЛИ ==========
+        capture_event(message.from_user.id, "shared_goal_joined", {
+            "goal_name": result['name']
+        })
+        # ===========================================================
         await message.answer(
             f"✅ You joined shared goal \"{result['name']}\"!\n\n"
             f"Target: {result['target']} {CURRENCIES[currency]['symbol']}\n"
