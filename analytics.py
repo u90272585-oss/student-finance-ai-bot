@@ -26,8 +26,9 @@ def identify_user(user_id, properties=None):
 
 
 def capture_event(user_id, event_name, properties=None):
-    """Отправка события в PostHog"""
+    print(f"📤 Отправка события: {event_name} для пользователя {user_id}")  # ← ЭТА СТРОЧКА
     if not POSTHOG_API_KEY:
+        print("❌ POSTHOG_API_KEY не найден")
         return
     props = properties or {}
     posthog.capture(
