@@ -5,7 +5,7 @@ POSTHOG_API_KEY = os.getenv("POSTHOG_API_KEY", "").strip()
 POSTHOG_HOST = os.getenv("POSTHOG_HOST", "https://us.i.posthog.com")
 
 if POSTHOG_API_KEY:
-    client = Posthog(api_key=POSTHOG_API_KEY, host=POSTHOG_HOST)
+    client = Posthog(POSTHOG_API_KEY, host=POSTHOG_HOST)
     print(f"✅ PostHog клиент создан, ключ: {POSTHOG_API_KEY[:10]}...")
 else:
     client = None
