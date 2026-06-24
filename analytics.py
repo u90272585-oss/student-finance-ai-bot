@@ -30,6 +30,9 @@ def capture_event(user_id, event_name, properties=None):
         api_key=POSTHOG_API_KEY,
         host=POSTHOG_HOST
     )
+POSTHOG_API_KEY = os.getenv("POSTHOG_API_KEY", "").strip()
+print(f"DEBUG POSTHOG KEY: '{POSTHOG_API_KEY}'")
+print(f"DEBUG KEY LENGTH: {len(POSTHOG_API_KEY)}")
 
 def capture_error(user_id, error_name, properties=None):
     capture_event(user_id, "error_occurred", properties or {"error": error_name})
