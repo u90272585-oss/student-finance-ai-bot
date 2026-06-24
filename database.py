@@ -1007,3 +1007,41 @@ class Database:
         delete_cached(f"goals:{user_id}")
 
         log_security_event("USER_DATA_DELETED", user_id, "telegram", {"action": "delete_all_data"})
+    async def get_kpi(self):
+        """KPI: конверсия, MRR, churn"""
+        if self.use_postgres:
+            async with self.pool.acquire() as conn:
+                total = await conn.fetchval("SELECT COUNT(*) FROM users")
+                premium = await conn.fetchval(
+                    "SELECT COUNT(*) FROM premium_users WHERE premium_until > NOW()"
+                )
+                churned = await conn.fetchval("""
+                    SELECT COUNT(*) FROM premium_users 
+                    WHERE premium_until < NOW() 
+                    AND premium_until > NOW() - INTERVAL '30 days'
+                """)
+        else:
+            self.cursor.execute("SELECT COUNT(*) FROM users")
+            total = self.cursor.fetchone()[0]
+            self.cursor.execute(
+                "SELECT COUNT(*) FROM premium_users WHERE premium_until > datetime('now')"
+            )
+            premium = self.cursor.fetchone()[0]
+            self.cursor.execute("""
+                SELECT COUNT(*) FROM premium_users 
+                WHERE premium_until < datetime('now')
+                AND premium_until > datetime('now', '-30 days')
+            """)
+            churned = self.cursor.fetchone()[0]
+
+        conversion = round(premium / total * 100, 2) if total > 0 else 0
+        mrr = premium * 290
+        churn = round(churned / premium * 100, 2) if premium > 0 else 0
+
+        return {
+            "total_users": total,
+            "premium_users": premium,
+            "conversion": conversion,
+            "mrr": mrr,
+            "churn": churn
+        }

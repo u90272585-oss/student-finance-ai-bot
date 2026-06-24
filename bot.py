@@ -1169,6 +1169,7 @@ async def show_premium_info(message: types.Message):
     lang = user["language"]
     user_id = message.from_user.id
     is_premium = await db.is_premium(user_id)
+    capture_event(user_id, "premium_page_viewed", {"is_premium": is_premium})
     
     if is_premium:
         expiry = await db.get_premium_expiry(user_id)
@@ -1342,6 +1343,7 @@ async def handle_game_data(message: types.Message):
         coins_earned = score
         await db.add_coins(message.from_user.id, coins_earned)
         total_coins, _ = await db.get_coins(message.from_user.id)
+        capture_event(message.from_user.id, "game_finished", {"score": score, "coins_earned": coins_earned})
         discount_text = ""
         if total_coins >= 500:
             discount_text = "\n\n🎉 У тебя достаточно монет для скидки 50%!\nНапиши /discount чтобы получить!"
@@ -1390,6 +1392,28 @@ async def discount_command(message: types.Message, state: FSMContext):
             parse_mode="HTML",
             reply_markup=get_main_keyboard(lang)
         )
+
+# ========== KPI КОМАНДА ==========
+@dp.message(Command("kpi"))
+async def show_kpi(message: types.Message):
+    if message.from_user.id != ADMIN_ID:
+        return
+    kpi = await db.get_kpi()
+    await message.answer(
+        f"📊 <b>KPI дашборд</b>
+
+"
+        f"👥 Всего пользователей: <b>{kpi['total_users']}</b>
+"
+        f"💎 Премиум активных: <b>{kpi['premium_users']}</b>
+"
+        f"📈 Конверсия: <b>{kpi['conversion']}%</b>
+"
+        f"💰 MRR: <b>{kpi['mrr']} ₸</b>
+"
+        f"📉 Churn: <b>{kpi['churn']}%</b>",
+        parse_mode="HTML"
+    )
 
 # ========== ЭТОТ ОБРАБОТЧИК ВСЕГДА ПОСЛЕДНИЙ ==========
 @dp.message()
