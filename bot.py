@@ -1233,7 +1233,7 @@ async def add_money_to_goal_select(message: types.Message, state: FSMContext):
     text = "🎯 Select a goal to add money:\n\n"
     keyboard_buttons = []
     for i, (goal_id, name, target, current) in enumerate(goals, 1):
-        percent = (current / target * 100) if target > 0 else 0
+        percent = (current / float(target) * 100) if float(target) > 0 else 0
         text += f"{i}. {name} ({current:.0f}/{target:.0f} {CURRENCIES[currency]['symbol']}) - {percent:.0f}%\n"
         keyboard_buttons.append([KeyboardButton(text=f"{i}. {name}")])
     keyboard_buttons.append([KeyboardButton(text=get_text(lang, 'cancel'))])
