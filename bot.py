@@ -42,8 +42,24 @@ from plant_goals import get_plant_text, get_plant_choice_keyboard, PLANT_TYPES
 load_dotenv()
 TOKEN = os.getenv('BOT_TOKEN')
 
+import json
+from datetime import datetime
+
+class JSONFormatter(logging.Formatter):
+    def format(self, record):
+        return json.dumps({
+            "timestamp": datetime.utcnow().isoformat(),
+            "level": record.levelname,
+            "message": record.getMessage(),
+            "service": "finance-bot",
+        })
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+logger.handlers = []
+handler = logging.StreamHandler()
+handler.setFormatter(JSONFormatter())
+logger.addHandler(handler)
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
