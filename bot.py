@@ -11,6 +11,7 @@ from security_logger import log_admin_access, log_security_event
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 import analytics
 from analytics import capture_event, identify_user
+from prometheus_fastapi_instrumentator import Instrumentator
 
 # ─── ИМПОРТ ДЛЯ FASTAPI И PAYPAL ────────────────────────────────────
 from fastapi import FastAPI, HTTPException, Request, status
@@ -51,6 +52,10 @@ db = Database()
 
 # ========== 1. СОЗДАЕМ FASTAPI ПРИЛОЖЕНИЕ ==========
 app = FastAPI()
+
+# ========== ПРОМЕТЕУС МЕТРИКИ ==========
+from prometheus_fastapi_instrumentator import Instrumentator
+Instrumentator().instrument(app).expose(app)
 
 # ========== 2. ПОДКЛЮЧАЕМ РОУТЕР ПЛАТЕЖЕЙ ==========
 from payment import router as payment_router
