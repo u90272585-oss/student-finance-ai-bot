@@ -1400,19 +1400,12 @@ async def show_kpi(message: types.Message):
         return
     kpi = await db.get_kpi()
     await message.answer(
-        f"📊 <b>KPI дашборд</b>
-
-"
-        f"👥 Всего пользователей: <b>{kpi['total_users']}</b>
-"
-        f"💎 Премиум активных: <b>{kpi['premium_users']}</b>
-"
-        f"📈 Конверсия: <b>{kpi['conversion']}%</b>
-"
-        f"💰 MRR: <b>{kpi['mrr']} ₸</b>
-"
-        f"📉 Churn: <b>{kpi['churn']}%</b>",
-        parse_mode="HTML"
+        f"📊 KPI дашборд\n\n"
+        f"👥 Всего пользователей: {kpi['total_users']}\n"
+        f"💎 Премиум активных: {kpi['premium_users']}\n"
+        f"📈 Конверсия: {kpi['conversion']}%\n"
+        f"💰 MRR: {kpi['mrr']} тенге\n"
+        f"📉 Churn: {kpi['churn']}%",
     )
 
 # ========== ЭТОТ ОБРАБОТЧИК ВСЕГДА ПОСЛЕДНИЙ ==========
