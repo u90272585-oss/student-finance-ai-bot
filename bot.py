@@ -47,12 +47,15 @@ from datetime import datetime
 
 class JSONFormatter(logging.Formatter):
     def format(self, record):
-        return json.dumps({
+        log = {
             "timestamp": datetime.utcnow().isoformat(),
             "level": record.levelname,
             "message": record.getMessage(),
             "service": "finance-bot",
-        })
+        }
+        if hasattr(record, 'extra'):
+            log.update(record.extra)
+        return json.dumps(log, ensure_ascii=False)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -155,6 +158,7 @@ class SharedGoalState(StatesGroup):
 async def cmd_start(message: types.Message, state: FSMContext):
     user_id = message.from_user.id
     user = await db.get_user(user_id)
+    logger.info("user_start", extra={"user_id": user_id, "has_account": bool(user)})
     if user:
         lang = user["language"]
         
@@ -462,7 +466,8 @@ async def transaction_note(message: types.Message, state: FSMContext):
     data = await state.get_data()
     note = "" if message.text == "/skip" else message.text
     await db.add_transaction(message.from_user.id, data['type'], data['amount'], data['category'], note)
-    
+    logger.info("transaction_saved", extra={"extra": {"user_id": message.from_user.id, "type": data['type'], "amount": data['amount']}})
+
     # ========== 🚀 POSTHOG: ДОБАВЛЕНИЕ ТРАНЗАКЦИИ ==========
     capture_event(message.from_user.id, "transaction_added", {
         "type": data['type'],
