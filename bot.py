@@ -70,6 +70,9 @@ db = Database()
 
 # ========== 1. СОЗДАЕМ FASTAPI ПРИЛОЖЕНИЕ ==========
 app = FastAPI()
+@app.get("/health")
+async def health():
+    return {"status": "ok", "service": "finance-bot"}
 
 # ========== ПРОМЕТЕУС МЕТРИКИ ==========
 from prometheus_fastapi_instrumentator import Instrumentator
