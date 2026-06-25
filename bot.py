@@ -54,7 +54,20 @@ app = FastAPI()
 
 # ========== ПРОМЕТЕУС МЕТРИКИ ==========
 from prometheus_fastapi_instrumentator import Instrumentator
-Instrumentator().instrument(app).expose(app)
+from fastapi import Depends, HTTPException
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
+import secrets
+
+security = HTTPBasic()
+
+def verify_metrics_auth(credentials: HTTPBasicCredentials = Depends(security)):
+    correct_username = secrets.compare_digest(credentials.username, "admin")
+    correct_password = secrets.compare_digest(credentials.password, "admin123")
+    if not (correct_username and correct_password):
+        raise HTTPException(status_code=401)
+    return credentials
+
+Instrumentator().instrument(app).expose(app, dependencies=[Depends(verify_metrics_auth)])
 
 # ========== 2. ПОДКЛЮЧАЕМ РОУТЕР ПЛАТЕЖЕЙ ==========
 from payment import router as payment_router
