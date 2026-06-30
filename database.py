@@ -1007,6 +1007,7 @@ class Database:
         delete_cached(f"goals:{user_id}")
 
         log_security_event("USER_DATA_DELETED", user_id, "telegram", {"action": "delete_all_data"})
+
     async def get_kpi(self):
         """KPI: конверсия, MRR, churn"""
         if self.use_postgres:
