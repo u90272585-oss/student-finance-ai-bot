@@ -932,11 +932,11 @@ async def join_shared_goal_execute(message: types.Message, state: FSMContext):
     elif result == 'already_member':
         await message.answer("⚠️ You are already a member of this goal!", reply_markup=get_shared_goals_keyboard())
     else:
-         # ========= 🚀 POSTHOG: ПРИСОЕДИНЕНИЕ К ОБЩЕЙ ЦЕЛИ =========
+         # постхог
         capture_event(message.from_user.id, "shared_goal_joined", {
             "goal_name": result['name']
         })
-        # ===========================================================
+        #в
         await message.answer(
             f"✅ You joined shared goal \"{result['name']}\"!\n\n"
             f"Target: {result['target']} {CURRENCIES[currency]['symbol']}\n"
